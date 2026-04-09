@@ -43,7 +43,7 @@ func clearEnv(t *testing.T) {
 func TestResolve_Defaults(t *testing.T) {
 	clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestResolve_EnvVars(t *testing.T) {
 	os.Setenv("SYNESIS_TIMEOUT", "60")
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,7 +96,7 @@ timeout: 90
 	os.Setenv("SYNESIS_API_KEY", "env-key")
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -126,7 +126,7 @@ base_url: [unclosed
 	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("invalid YAML should not cause fatal error, got: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestResolve_PermissionDenied(t *testing.T) {
 	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		return
 	}
@@ -168,7 +168,7 @@ func TestResolve_InvalidTimeoutValue(t *testing.T) {
 	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("invalid timeout should not cause fatal error, got: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestResolve_NegativeTimeout(t *testing.T) {
 	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("negative timeout should not cause fatal error, got: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestResolve_EmptyConfigFile(t *testing.T) {
 	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("empty config file should not cause error, got: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestResolve_ConfigPathPrecedence(t *testing.T) {
 	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestResolve_EnvTimeoutTakesPrecedence(t *testing.T) {
 	os.Setenv("SYNESIS_TIMEOUT", "45")
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -348,7 +348,7 @@ func TestResolve_AllEnvVarsSet(t *testing.T) {
 	os.Setenv("SYNESIS_ORG_ID", "test-org")
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -386,7 +386,7 @@ timeout: notint
 	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		return
 	}
@@ -400,7 +400,7 @@ func TestResolve_NonExistentConfigFile(t *testing.T) {
 	os.Setenv("XDG_CONFIG_HOME", tmpDir)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("non-existent config should not error, got: %v", err)
 	}
@@ -423,7 +423,7 @@ func TestResolve_BothFileAndEnvEndpoint(t *testing.T) {
 	os.Setenv("SYNESIS_ENDPOINT", "v1/env/endpoint")
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestLoadedConfig_ReportsSources(t *testing.T) {
 	os.Setenv("SYNESIS_API_KEY", "source-test-key")
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -478,7 +478,7 @@ model: file-model
 	os.Setenv("SYNESIS_TIMEOUT", "999")
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -514,7 +514,7 @@ func TestResolve_ConcurrentCalls(t *testing.T) {
 	errCh := make(chan error, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			cfg, err := Resolve()
+			cfg, err := Resolve("")
 			if err != nil {
 				errCh <- err
 				return
@@ -549,11 +549,210 @@ func TestResolve_LargeTimeoutValue(t *testing.T) {
 	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
 	defer clearEnv(t)
 
-	cfg, err := Resolve()
+	cfg, err := Resolve("")
 	if err != nil {
 		t.Fatalf("large timeout should not cause fatal error, got: %v", err)
 	}
 	if cfg.Cfg.Timeout != 8640000 {
 		t.Errorf("expected timeout 8640000, got %d", cfg.Cfg.Timeout)
+	}
+}
+
+func TestResolve_Profile(t *testing.T) {
+	clearEnv(t)
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	configContent := `
+default_profile: fast
+profiles:
+  fast:
+    model: gpt-4o-mini
+    timeout: 30
+  slow:
+    model: gpt-4
+    timeout: 300
+    base_url: https://slow.example.com
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
+	defer clearEnv(t)
+
+	// Test default profile application
+	cfg, err := Resolve("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ProfileUsed != "fast" {
+		t.Errorf("expected default profile 'fast', got '%s'", cfg.ProfileUsed)
+	}
+	if cfg.Cfg.Model != "gpt-4o-mini" {
+		t.Errorf("expected model from profile, got %s", cfg.Cfg.Model)
+	}
+	if cfg.Cfg.Timeout != 30 {
+		t.Errorf("expected timeout from profile, got %d", cfg.Cfg.Timeout)
+	}
+
+	// Test explicit profile override
+	cfg2, err := Resolve("slow")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg2.ProfileUsed != "slow" {
+		t.Errorf("expected profile 'slow', got '%s'", cfg2.ProfileUsed)
+	}
+	if cfg2.Cfg.Model != "gpt-4" {
+		t.Errorf("expected model from slow profile, got %s", cfg2.Cfg.Model)
+	}
+	if cfg2.Cfg.Timeout != 300 {
+		t.Errorf("expected timeout from slow profile, got %d", cfg2.Cfg.Timeout)
+	}
+	if cfg2.Cfg.BaseURL != "https://slow.example.com" {
+		t.Errorf("expected base_url from slow profile, got %s", cfg2.Cfg.BaseURL)
+	}
+}
+
+func TestResolve_ProfileEnvOverride(t *testing.T) {
+	clearEnv(t)
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	configContent := `
+profiles:
+  fast:
+    model: gpt-4o-mini
+    base_url: https://profile.example.com
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
+	os.Setenv("SYNESIS_BASE_URL", "https://env.example.com")
+	defer clearEnv(t)
+
+	cfg, err := Resolve("fast")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Env should override profile
+	if cfg.Cfg.BaseURL != "https://env.example.com" {
+		t.Errorf("expected base_url from env, got %s", cfg.Cfg.BaseURL)
+	}
+	if cfg.Cfg.Model != "gpt-4o-mini" {
+		t.Errorf("expected model from profile, got %s", cfg.Cfg.Model)
+	}
+}
+
+func TestConfig_GetProfile(t *testing.T) {
+	clearEnv(t)
+
+	cfg := &Config{
+		Profiles: map[string]Profile{
+			"test": {Name: "test", Model: "test-model"},
+		},
+	}
+
+	profile := cfg.GetProfile("test")
+	if profile == nil {
+		t.Fatal("expected to find 'test' profile")
+	}
+	if profile.Model != "test-model" {
+		t.Errorf("expected model 'test-model', got %s", profile.Model)
+	}
+
+	profile = cfg.GetProfile("nonexistent")
+	if profile != nil {
+		t.Error("expected nil for nonexistent profile")
+	}
+}
+
+func TestConfig_ListProfiles(t *testing.T) {
+	clearEnv(t)
+
+	cfg := &Config{
+		Profiles: map[string]Profile{
+			"alpha": {Name: "alpha"},
+			"beta":  {Name: "beta"},
+			"gamma": {Name: "gamma"},
+		},
+	}
+
+	profiles := cfg.ListProfiles()
+	if len(profiles) != 3 {
+		t.Errorf("expected 3 profiles, got %d", len(profiles))
+	}
+}
+
+func TestConfig_ProfileExists(t *testing.T) {
+	clearEnv(t)
+
+	cfg := &Config{
+		Profiles: map[string]Profile{
+			"existing": {Name: "existing"},
+		},
+	}
+
+	if !cfg.ProfileExists("existing") {
+		t.Error("expected 'existing' profile to exist")
+	}
+	if cfg.ProfileExists("nonexistent") {
+		t.Error("expected 'nonexistent' profile to not exist")
+	}
+}
+
+func TestConfig_SaveConfig(t *testing.T) {
+	clearEnv(t)
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := &Config{
+		BaseURL:  "https://test.example.com",
+		APIKey:   "test-key",
+		Model:    "test-model",
+		Timeout:  60,
+		Profiles: map[string]Profile{"test": {Name: "test", Model: "test-model"}},
+	}
+
+	err := SaveConfig(cfg, configPath)
+	if err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	// Verify file was written
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read saved config: %v", err)
+	}
+	if len(data) == 0 {
+		t.Error("saved config file is empty")
+	}
+}
+
+func TestResolve_NonexistentProfile(t *testing.T) {
+	clearEnv(t)
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	configContent := `
+profiles:
+  existing:
+    model: test-model
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+	os.Setenv("SYNESIS_CONFIG_PATH", configPath)
+	defer clearEnv(t)
+
+	// Requesting nonexistent profile should not error, just not apply it
+	cfg, err := Resolve("nonexistent")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ProfileUsed != "" {
+		t.Errorf("expected no profile used, got '%s'", cfg.ProfileUsed)
 	}
 }

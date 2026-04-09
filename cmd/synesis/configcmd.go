@@ -9,7 +9,7 @@ import (
 )
 
 // runConfig implements the config command
-func runConfig(args []string, noColor, quiet bool) error {
+func runConfig(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("config", flag.ExitOnError)
 	showSources := fs.Bool("sources", false, "show configuration sources")
 	jsonOutput := fs.Bool("json", false, "output JSON")
@@ -17,7 +17,7 @@ func runConfig(args []string, noColor, quiet bool) error {
 
 	fs.Parse(args)
 
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}

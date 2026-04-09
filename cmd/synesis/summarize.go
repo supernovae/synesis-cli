@@ -10,10 +10,11 @@ import (
 
 	"synesis.sh/synesis/internal/api"
 	"synesis.sh/synesis/pkg/config"
+	"synesis.sh/synesis/pkg/ui"
 )
 
 // runSummarize implements the summarize command
-func runSummarize(args []string, noColor, quiet bool) error {
+func runSummarize(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("summarize", flag.ContinueOnError)
 	fs.SetOutput(nil)
 	model := fs.String("model", "", "model to use")
@@ -21,6 +22,7 @@ func runSummarize(args []string, noColor, quiet bool) error {
 	timeout := fs.Int("timeout", 120, "timeout in seconds")
 	output := fs.String("output", "text", "output format: text, json")
 	short := fs.Bool("short", false, "short summary")
+	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 
 	fs.Parse(args)
 
@@ -52,7 +54,7 @@ func runSummarize(args []string, noColor, quiet bool) error {
 	}
 
 	// Load config
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
@@ -100,11 +102,23 @@ func runSummarize(args []string, noColor, quiet bool) error {
 
 	content = resp.Choices[0].Message.Content
 
+	// Parse render mode
+	renderMode := ui.RenderPlain
+	if *renderModeStr != "" {
+		m, err := ui.ParseRenderMode(*renderModeStr)
+		if err != nil {
+			return fmt.Errorf("render mode: %w", err)
+		}
+		renderMode = m
+	}
+
 	switch *output {
 	case "json":
 		fmt.Fprintf(os.Stdout, `{"summary": %s}`+"\n", jsonMarshal(content))
 	default:
-		fmt.Println(content)
+		// Apply render mode
+		rendered := ui.RenderResponse(content, renderMode, noColor, ui.IsTerminal())
+		fmt.Println(rendered)
 	}
 
 	return nil

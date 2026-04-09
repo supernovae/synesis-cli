@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -32,6 +33,29 @@ const (
 	OutputJSON
 	OutputNDJSON
 )
+
+// RenderMode represents the response rendering mode
+type RenderMode int
+
+const (
+	RenderPlain RenderMode = iota
+	RenderMarkdown
+	RenderRaw
+)
+
+// ParseRenderMode parses a render mode string
+func ParseRenderMode(s string) (RenderMode, error) {
+	switch strings.ToLower(s) {
+	case "plain", "text":
+		return RenderPlain, nil
+	case "markdown", "md":
+		return RenderMarkdown, nil
+	case "raw":
+		return RenderRaw, nil
+	default:
+		return RenderPlain, fmt.Errorf("unknown render mode: %s", s)
+	}
+}
 
 // Config holds UI configuration
 type Config struct {
@@ -82,15 +106,15 @@ func (s *Spinner) Stop() {
 	if !s.enabled {
 		return
 	}
-	fmt.Fprint(os.Stderr, "\r" + strings.Repeat(" ", 80) + "\r")
+	fmt.Fprint(os.Stderr, "\r"+strings.Repeat(" ", 80)+"\r")
 }
 
 var DisableSpinner = false
 
 // ProgressWriter writes progress to stderr
 type ProgressWriter struct {
-enabled bool
-quiet   bool
+	enabled bool
+	quiet   bool
 }
 
 // NewProgressWriter creates a progress writer
@@ -162,3 +186,96 @@ var (
 	IsMac     = runtime.GOOS == "darwin"
 	IsLinux   = runtime.GOOS == "linux"
 )
+
+// RenderResponse renders a response according to the render mode
+func RenderResponse(content string, mode RenderMode, noColor bool, isTTY bool) string {
+	switch mode {
+	case RenderRaw:
+		return content
+	case RenderMarkdown:
+		if isTTY {
+			return renderMarkdownText(content, noColor)
+		}
+		return content
+	case RenderPlain:
+		fallthrough
+	default:
+		return StripMarkdown(content)
+	}
+}
+
+// renderMarkdownText applies basic markdown formatting for terminal display
+func renderMarkdownText(content string, noColor bool) string {
+	if noColor || !IsTerminal() {
+		return content
+	}
+
+	result := content
+
+	// Bold headers (# Header)
+	headerRegex := regexp.MustCompile(`(?m)^(#+)\s+(.+)$`)
+	result = headerRegex.ReplaceAllStringFunc(result, func(match string) string {
+		parts := headerRegex.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+		return ColorBold + parts[2] + ColorReset
+	})
+
+	// Bold **text**
+	boldRegex := regexp.MustCompile(`\*\*(.+?)\*\*`)
+	result = boldRegex.ReplaceAllStringFunc(result, func(match string) string {
+		parts := boldRegex.FindStringSubmatch(match)
+		if len(parts) != 2 {
+			return match
+		}
+		return ColorBold + parts[1] + ColorReset
+	})
+
+	// Italic *text*
+	italicRegex := regexp.MustCompile(`\*(.+?)\*`)
+	result = italicRegex.ReplaceAllStringFunc(result, func(match string) string {
+		parts := italicRegex.FindStringSubmatch(match)
+		if len(parts) != 2 {
+			return match
+		}
+		return ColorCyan + parts[1] + ColorReset
+	})
+
+	// Inline code `code`
+	codeRegex := regexp.MustCompile("`([^`]+)`")
+	result = codeRegex.ReplaceAllStringFunc(result, func(match string) string {
+		parts := codeRegex.FindStringSubmatch(match)
+		if len(parts) != 2 {
+			return match
+		}
+		return ColorGray + parts[1] + ColorReset
+	})
+
+	return result
+}
+
+// StripMarkdown removes markdown formatting from text
+func StripMarkdown(content string) string {
+	result := content
+
+	// Remove headers
+	headerRegex := regexp.MustCompile(`(?m)^(#+)\s+(.+)$`)
+	result = headerRegex.ReplaceAllString(result, "$2")
+
+	// Remove bold
+	result = strings.ReplaceAll(result, "**", "")
+
+	// Remove italic
+	italicRegex := regexp.MustCompile(`\*(.+?)\*`)
+	result = italicRegex.ReplaceAllString(result, "$1")
+
+	// Remove inline code
+	result = strings.ReplaceAll(result, "`", "")
+
+	// Remove links [text](url) -> text
+	linkRegex := regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	result = linkRegex.ReplaceAllString(result, "$1")
+
+	return result
+}

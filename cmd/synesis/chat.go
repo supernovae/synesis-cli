@@ -27,7 +27,7 @@ func sessionToAPIMessages(msgs []session.Message) []api.Message {
 }
 
 // runChat implements the chat command
-func runChat(args []string, noColor, quiet bool) error {
+func runChat(args []string, noColor, quiet bool, profileName string) error {
 	// Parse flags
 	fs := flag.NewFlagSet("chat", flag.ExitOnError)
 	model := fs.String("model", "", "model to use")
@@ -40,6 +40,7 @@ func runChat(args []string, noColor, quiet bool) error {
 	timeout := fs.Int("timeout", 0, "timeout in seconds")
 	includeStdin := fs.Bool("include-stdin", false, "include stdin in prompt")
 	raw := fs.Bool("raw", false, "output raw response without formatting")
+	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 	output := fs.String("output", "text", "output format: text, json, ndjson")
 
 	fs.Parse(args)
@@ -52,7 +53,7 @@ func runChat(args []string, noColor, quiet bool) error {
 	isTTY := ui.IsTerminal()
 
 	// Load config
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
@@ -160,6 +161,16 @@ func runChat(args []string, noColor, quiet bool) error {
 		outputMode = ui.OutputNDJSON
 	}
 
+	// Parse render mode
+	renderMode := ui.RenderPlain
+	if *renderModeStr != "" {
+		m, err := ui.ParseRenderMode(*renderModeStr)
+		if err != nil {
+			return fmt.Errorf("render mode: %w", err)
+		}
+		renderMode = m
+	}
+
 	// Execute based on streaming preference
 	var finalContent string
 	if *stream && isTTY {
@@ -199,10 +210,12 @@ func runChat(args []string, noColor, quiet bool) error {
 		case ui.OutputNDJSON:
 			fmt.Fprintf(os.Stdout, `%s`+"\n", jsonMarshal(finalContent))
 		default:
-			if *raw {
-				os.Stdout.WriteString(finalContent)
+			// Apply render mode
+			rendered := ui.RenderResponse(finalContent, renderMode, noColor, isTTY)
+			if *raw || renderMode == ui.RenderRaw {
+				os.Stdout.WriteString(rendered)
 			} else {
-				fmt.Println(finalContent)
+				fmt.Println(rendered)
 			}
 		}
 	}

@@ -15,7 +15,7 @@ import (
 )
 
 // runDoctor runs diagnostics
-func runDoctor(args []string, noColor, quiet bool) error {
+func runDoctor(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
 	_ = fs.Bool("v", false, "verbose output")
 	fix := fs.Bool("fix", false, "attempt to fix issues")
@@ -41,11 +41,14 @@ func runDoctor(args []string, noColor, quiet bool) error {
 
 	// 1. Config check
 	fmt.Println("1. Configuration:")
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		printCheck("config loading", false, err.Error())
 	} else {
 		printCheck("config loading", true, "")
+		if cfg.ProfileUsed != "" && !quiet {
+			fmt.Printf("   Using profile: %s\n", cfg.ProfileUsed)
+		}
 	}
 
 	// 2. Validate config

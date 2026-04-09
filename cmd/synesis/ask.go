@@ -14,7 +14,7 @@ import (
 )
 
 // runAsk implements the ask command (one-shot mode)
-func runAsk(args []string, noColor, quiet bool) error {
+func runAsk(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("ask", flag.ContinueOnError)
 	fs.SetOutput(nil) // Disable default error output
 	model := fs.String("model", "", "model to use")
@@ -24,6 +24,7 @@ func runAsk(args []string, noColor, quiet bool) error {
 	timeout := fs.Int("timeout", 120, "timeout in seconds")
 	output := fs.String("output", "text", "output format: text, json, ndjson")
 	raw := fs.Bool("raw", false, "raw output")
+	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 	noStream := fs.Bool("no-stream", false, "disable streaming")
 	includeStdin := fs.Bool("include-stdin", true, "include stdin in prompt")
 
@@ -41,7 +42,7 @@ func runAsk(args []string, noColor, quiet bool) error {
 	hasStdin := (stat.Mode() & os.ModeCharDevice) == 0
 
 	// Load config
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
@@ -124,6 +125,16 @@ func runAsk(args []string, noColor, quiet bool) error {
 		outputMode = ui.OutputNDJSON
 	}
 
+	// Parse render mode
+	renderMode := ui.RenderPlain
+	if *renderModeStr != "" {
+		m, err := ui.ParseRenderMode(*renderModeStr)
+		if err != nil {
+			return fmt.Errorf("render mode: %w", err)
+		}
+		renderMode = m
+	}
+
 	isFrontend := ui.IsTerminal() && !*noStream
 
 	if isFrontend {
@@ -155,16 +166,19 @@ func runAsk(args []string, noColor, quiet bool) error {
 
 		content := resp.Choices[0].Message.Content
 
+		// Handle output format for non-streaming
 		switch outputMode {
 		case ui.OutputJSON:
 			fmt.Fprintf(os.Stdout, `{"content": %s}`+"\n", jsonMarshal(content))
 		case ui.OutputNDJSON:
 			fmt.Fprintf(os.Stdout, `%s`+"\n", jsonMarshal(content))
 		default:
-			if *raw {
-				os.Stdout.WriteString(content)
+			// Apply render mode
+			rendered := ui.RenderResponse(content, renderMode, noColor, ui.IsTerminal())
+			if *raw || renderMode == ui.RenderRaw {
+				os.Stdout.WriteString(rendered)
 			} else {
-				fmt.Println(content)
+				fmt.Println(rendered)
 			}
 		}
 	}
@@ -185,6 +199,7 @@ Options:
   -timeout int         timeout in seconds (default 120)
   -output text|json|ndjson   output format (default text)
   -raw                 raw output (no newline)
+  -render string       render mode: plain, markdown, raw (default "plain")
   -no-stream           disable streaming
   -include-stdin bool  include stdin in prompt (default true)
 
@@ -192,6 +207,7 @@ Examples:
   synesis ask "what time is it"
   echo "hello world" | synesis ask "translate to french"
   synesis ask --output json "list 3 colors"
+  synesis ask --render markdown "explain closures"
   cat log.txt | synesis ask "find errors"
 
 `)

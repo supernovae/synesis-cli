@@ -184,6 +184,25 @@ Run diagnostics and validation.
 - `--output json` - Valid JSON
 - `--output ndjson` - Newline-delimited JSON
 
+## Response Rendering
+
+Control how AI responses are formatted:
+
+- `--render plain` - Strip all markdown, plain text output (default)
+- `--render markdown` - Render markdown formatting (bold, italic, code) with colors
+- `--render raw` - Output raw response unchanged
+
+```bash
+# Get formatted output with markdown highlighting
+synesis ask --render markdown "explain Go interfaces"
+
+# Get plain text for scripts
+synesis ask --render plain "what is 2+2"
+
+# Get raw response for processing
+synesis ask --render raw "generate JSON"
+```
+
 ## Flags
 
 | Flag | Description |

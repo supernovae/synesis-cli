@@ -17,6 +17,21 @@ type Config struct {
 	Timeout  int    `yaml:"timeout,omitempty"` // seconds
 	OrgID    string `yaml:"org_id,omitempty"`
 	Endpoint string `yaml:"endpoint,omitempty"` // chat/completions or responses
+
+	// Profile support
+	DefaultProfile string            `yaml:"default_profile,omitempty"`
+	Profiles       map[string]Profile `yaml:"profiles,omitempty"`
+}
+
+// Profile represents a named configuration profile
+type Profile struct {
+	Name     string `yaml:"name,omitempty"`
+	BaseURL  string `yaml:"base_url,omitempty"`
+	APIKey   string `yaml:"api_key,omitempty"`
+	Model    string `yaml:"model,omitempty"`
+	Timeout  int    `yaml:"timeout,omitempty"`
+	OrgID    string `yaml:"org_id,omitempty"`
+	Endpoint string `yaml:"endpoint,omitempty"`
 }
 
 // EffectiveConfig returns a copy with secrets redacted
@@ -32,20 +47,23 @@ const RedactedSecret = "[REDACTED]"
 
 // LoadedConfig holds resolved configuration and source info
 type LoadedConfig struct {
-	Sources []string // which sources were used
-	File    string   // config file path if used
-	Cfg     Config   // resolved config
-	EnvUsed bool     // whether env vars were used
+	Sources     []string // which sources were used
+	File        string   // config file path if used
+	Cfg         Config   // resolved config
+	EnvUsed     bool     // whether env vars were used
+	ProfileUsed string   // which profile was used (if any)
 }
 
 // Resolve merges config from file, env vars, and defaults
-func Resolve() (*LoadedConfig, error) {
+// If profileName is provided, it applies that profile's settings
+func Resolve(profileName string) (*LoadedConfig, error) {
 	cfg := Config{
 		Timeout:  120,
 		Endpoint: "chat/completions",
 	}
 	sources := []string{"defaults"}
 	envUsed := false
+	var profileUsed string
 
 	// Load config file
 	paths := configPaths()
@@ -74,13 +92,51 @@ func Resolve() (*LoadedConfig, error) {
 				if fileCfg.Endpoint != "" {
 					cfg.Endpoint = fileCfg.Endpoint
 				}
+				if fileCfg.DefaultProfile != "" {
+					cfg.DefaultProfile = fileCfg.DefaultProfile
+				}
+				if fileCfg.Profiles != nil {
+					cfg.Profiles = fileCfg.Profiles
+				}
 				sources = append(sources, "config:"+filepath.Base(p))
 				break // first valid config file wins
 			}
 		}
 	}
 
-	// Environment variables override file
+	// Apply profile if specified via argument or default
+	profileToApply := profileName
+	if profileToApply == "" && cfg.DefaultProfile != "" {
+		profileToApply = cfg.DefaultProfile
+	}
+
+	if profileToApply != "" && cfg.Profiles != nil {
+		if profile, ok := cfg.Profiles[profileToApply]; ok {
+			profileUsed = profileToApply
+			// Profile settings override file config
+			if profile.BaseURL != "" {
+				cfg.BaseURL = profile.BaseURL
+			}
+			if profile.APIKey != "" {
+				cfg.APIKey = profile.APIKey
+			}
+			if profile.Model != "" {
+				cfg.Model = profile.Model
+			}
+			if profile.Timeout > 0 {
+				cfg.Timeout = profile.Timeout
+			}
+			if profile.OrgID != "" {
+				cfg.OrgID = profile.OrgID
+			}
+			if profile.Endpoint != "" {
+				cfg.Endpoint = profile.Endpoint
+			}
+			sources = append(sources, "profile:"+profileToApply)
+		}
+	}
+
+	// Environment variables override file and profile (highest precedence)
 	if v := os.Getenv("SYNESIS_BASE_URL"); v != "" {
 		cfg.BaseURL = v
 		sources = append(sources, "env:SYNESIS_BASE_URL")
@@ -112,10 +168,11 @@ func Resolve() (*LoadedConfig, error) {
 	}
 
 	return &LoadedConfig{
-		Sources: sources,
-		File:    loadedFile,
-		Cfg:     cfg,
-		EnvUsed: envUsed,
+		Sources:     sources,
+		File:        loadedFile,
+		Cfg:         cfg,
+		EnvUsed:     envUsed,
+		ProfileUsed: profileUsed,
 	}, nil
 }
 
@@ -163,4 +220,79 @@ func (c *Config) TimeoutDuration() time.Duration {
 		return 120 * time.Second
 	}
 	return time.Duration(c.Timeout) * time.Second
+}
+
+// GetProfile returns a profile by name, or nil if not found
+func (c *Config) GetProfile(name string) *Profile {
+	if c.Profiles == nil {
+		return nil
+	}
+	profile, ok := c.Profiles[name]
+	if !ok {
+		return nil
+	}
+	return &profile
+}
+
+// ListProfiles returns all profile names
+func (c *Config) ListProfiles() []string {
+	if c.Profiles == nil {
+		return nil
+	}
+	names := make([]string, 0, len(c.Profiles))
+	for name := range c.Profiles {
+		names = append(names, name)
+	}
+	return names
+}
+
+// ProfileExists checks if a profile exists
+func (c *Config) ProfileExists(name string) bool {
+	return c.GetProfile(name) != nil
+}
+
+// SaveConfig saves the configuration to the specified path
+func SaveConfig(cfg *Config, path string) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	// Create parent directory if needed
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+
+	// Write atomically via temp file
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
+		return fmt.Errorf("write temp: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename: %w", err)
+	}
+
+	return nil
+}
+
+// GetConfigPath returns the primary config file path
+func GetConfigPath() string {
+	paths := configPaths()
+	if len(paths) == 0 {
+		return ""
+	}
+
+	// Use XDG path if available
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "synesis", "config.yaml")
+	}
+
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		return filepath.Join(home, ".config", "synesis", "config.yaml")
+	}
+
+	return paths[0]
 }

@@ -27,6 +27,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "show version")
 	noColor := flag.Bool("no-color", false, "disable color output")
 	quiet := flag.Bool("quiet", false, "suppress non-essential output")
+	profile := flag.String("profile", "", "use named profile")
 	flag.Parse()
 
 	// Always check version first
@@ -59,25 +60,31 @@ func main() {
 
 	switch cmd {
 	case "chat":
-		err = runChat(args, *noColor, *quiet)
+		err = runChat(args, *noColor, *quiet, *profile)
 	case "ask":
-		err = runAsk(args, *noColor, *quiet)
+		err = runAsk(args, *noColor, *quiet, *profile)
 	case "session":
-		err = runSession(args, *noColor, *quiet)
+		err = runSession(args, *noColor, *quiet, *profile)
 	case "models":
-		err = runModels(args, *noColor, *quiet)
+		err = runModels(args, *noColor, *quiet, *profile)
 	case "config":
-		err = runConfig(args, *noColor, *quiet)
+		err = runConfig(args, *noColor, *quiet, *profile)
 	case "auth":
-		err = runAuth(args, *noColor, *quiet)
+		err = runAuth(args, *noColor, *quiet, *profile)
 	case "extract":
-		err = runExtract(args, *noColor, *quiet)
+		err = runExtract(args, *noColor, *quiet, *profile)
 	case "summarize":
-		err = runSummarize(args, *noColor, *quiet)
+		err = runSummarize(args, *noColor, *quiet, *profile)
 	case "commit-message":
-		err = runCommitMessage(args, *noColor, *quiet)
+		err = runCommitMessage(args, *noColor, *quiet, *profile)
 	case "doctor":
-		err = runDoctor(args, *noColor, *quiet)
+		err = runDoctor(args, *noColor, *quiet, *profile)
+	case "profile":
+		err = runProfile(args, *noColor, *quiet)
+	case "template":
+		err = runTemplate(args, *noColor, *quiet, *profile)
+	case "repl":
+		err = runREPL(args, *noColor, *quiet, *profile)
 	case "help", "--help", "-h":
 		printUsage()
 		os.Exit(0)
@@ -136,11 +143,15 @@ Commands:
   summarize        Summarize stdin, files, or prompt
   commit-message   Generate commit message from diff
   doctor           Run diagnostics
+  profile          Manage configuration profiles
+  template         Manage prompt templates
+  repl             Interactive REPL mode
 
 Options:
   -version         Show version information
   -quiet           Suppress non-essential output
   -no-color        Disable color output
+  -profile string  Use named profile
 
 Run 'synesis <command> --help' for more details.
 
@@ -150,12 +161,12 @@ Run 'synesis <command> --help' for more details.
 // Global client for reuse
 var globalClient api.Client
 
-func getClient() (api.Client, error) {
+func getClient(profileName string) (api.Client, error) {
 	if globalClient != nil {
 		return globalClient, nil
 	}
 
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return nil, err
 	}

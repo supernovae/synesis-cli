@@ -12,7 +12,7 @@ import (
 )
 
 // runAuth implements the auth command for configuring authentication
-func runAuth(args []string, noColor, quiet bool) error {
+func runAuth(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("auth", flag.ExitOnError)
 	baseURL := fs.String("url", "", "API base URL")
 	token := fs.String("token", "", "API token")
@@ -22,7 +22,7 @@ func runAuth(args []string, noColor, quiet bool) error {
 
 	fs.Parse(args)
 
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}

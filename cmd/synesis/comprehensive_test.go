@@ -150,14 +150,20 @@ func TestOutputContamination_StdoutAndStderrIsolation(t *testing.T) {
 	// Write JSON to stdout (like structured output)
 	fmt.Fprintf(os.Stdout, `{"content": "hello"}`+"\n")
 
-	os.Stdout.Close()
-	os.Stderr.Close()
+	// Close write ends to signal EOF to readers
+	wStdout.Close()
+	wStderr.Close()
+
+	// Restore stdout/stderr before waiting
 	os.Stdout = oldStdout
 	os.Stderr = oldStderr
+
+	// Wait for readers to finish
+	wg.Wait()
+
+	// Close read ends
 	rStdout.Close()
 	rStderr.Close()
-
-	wg.Wait()
 
 	stdout := stdoutBuf.String()
 	stderr := stderrBuf.String()
@@ -214,7 +220,7 @@ func TestConfigPrecedence_EnvOverridesFile(t *testing.T) {
 	t.Setenv("SYNESIS_API_KEY", "env-key")
 	t.Setenv("SYNESIS_CONFIG_PATH", cfgFile)
 
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve("")
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
@@ -246,7 +252,7 @@ func TestConfigPrecedence_EmptyEnvDoesNotOverrideFile(t *testing.T) {
 	t.Setenv("SYNESIS_MODEL", "")
 	t.Setenv("SYNESIS_CONFIG_PATH", cfgFile)
 
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve("")
 	if err != nil {
 		t.Fatalf("Resolve() error: %v", err)
 	}
@@ -263,7 +269,7 @@ func TestConfigPrecedence_MissingFileFallsBackToDefaults(t *testing.T) {
 	os.Unsetenv("SYNESIS_ENDPOINT")
 	os.Unsetenv("SYNESIS_BASE_URL")
 
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve("")
 	if err != nil {
 		t.Fatalf("Resolve() should not error on missing config: %v", err)
 	}
@@ -1083,7 +1089,7 @@ func TestAPICompatibility_NilRequestRejected(t *testing.T) {
 
 func TestConfigValidation_MissingModelAndEndpoint(t *testing.T) {
 	// Config with no model or endpoint should use defaults or return error.
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve("")
 	if err != nil {
 		t.Fatalf("Resolve() should not error on defaults: %v", err)
 	}
@@ -1108,7 +1114,7 @@ func TestConfigValidation_InvalidYAML(t *testing.T) {
 
 	t.Setenv("SYNESIS_CONFIG_PATH", cfgFile)
 
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve("")
 	if err != nil {
 		t.Logf("YAML parse error surfaced (acceptable): %v", err)
 	}

@@ -13,14 +13,14 @@ import (
 )
 
 // runModels implements the models command
-func runModels(args []string, noColor, quiet bool) error {
+func runModels(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("models", flag.ExitOnError)
 	jsonOutput := fs.Bool("json", false, "output JSON")
 
 	fs.Parse(args)
 
 	// Load config
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}

@@ -206,3 +206,244 @@ func (s *Store) save(sess *Session) error {
 
 	return nil
 }
+
+// ExportFormat represents the export format type
+type ExportFormat string
+
+const (
+	ExportJSON ExportFormat = "json"
+	ExportMD   ExportFormat = "md"
+)
+
+// Export exports a session to the specified format
+func (s *Store) Export(sess *Session, format string) ([]byte, error) {
+	switch format {
+	case "json":
+		return s.ExportJSON(sess)
+	case "md", "markdown":
+		return s.ExportMarkdown(sess)
+	default:
+		return nil, fmt.Errorf("unsupported export format: %s", format)
+	}
+}
+
+// ExportJSON exports a session as JSON
+func (s *Store) ExportJSON(sess *Session) ([]byte, error) {
+	data, err := json.MarshalIndent(sess, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal session: %w", err)
+	}
+	return data, nil
+}
+
+// ExportMarkdown exports a session as Markdown
+func (s *Store) ExportMarkdown(sess *Session) ([]byte, error) {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("# Session: %s\n\n", sess.ID))
+	sb.WriteString(fmt.Sprintf("**Model:** %s\n", sess.Model))
+	sb.WriteString(fmt.Sprintf("**Created:** %s\n", sess.CreatedAt.Format(time.RFC3339)))
+	sb.WriteString(fmt.Sprintf("**Updated:** %s\n", sess.UpdatedAt.Format(time.RFC3339)))
+
+	if sess.Name != "" {
+		sb.WriteString(fmt.Sprintf("**Name:** %s\n\n", sess.Name))
+	} else {
+		sb.WriteString("\n")
+	}
+
+	if sess.System != "" {
+		sb.WriteString("## System Prompt\n\n")
+		sb.WriteString(sess.System)
+		sb.WriteString("\n\n")
+	}
+
+	sb.WriteString("## Conversation\n\n")
+	for _, msg := range sess.Messages {
+		role := msg.Role
+		if role == "assistant" {
+			role = "Assistant"
+		} else if role == "user" {
+			role = "User"
+		} else if role == "system" {
+			role = "System"
+		}
+
+		sb.WriteString(fmt.Sprintf("### %s\n\n", role))
+		sb.WriteString(msg.Content)
+		sb.WriteString("\n\n")
+	}
+
+	if sess.Summary != "" {
+		sb.WriteString("## Summary\n\n")
+		sb.WriteString(sess.Summary)
+		sb.WriteString("\n")
+	}
+
+	return []byte(sb.String()), nil
+}
+
+// ImportSession imports a session from JSON data
+func (s *Store) ImportSession(data []byte) (*Session, error) {
+	var sess Session
+	if err := json.Unmarshal(data, &sess); err != nil {
+		return nil, fmt.Errorf("parse session JSON: %w", err)
+	}
+
+	// Validate required fields
+	if err := validateSession(&sess); err != nil {
+		return nil, err
+	}
+
+	// Generate new ID to avoid conflicts
+	sess.ID = uuid.New().String()
+	sess.CreatedAt = time.Now()
+	sess.UpdatedAt = time.Now()
+
+	return &sess, nil
+}
+
+// ImportFromFile imports a session from a file
+func (s *Store) ImportFromFile(path string) (*Session, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+
+	return s.ImportSession(data)
+}
+
+// ImportMarkdown imports a session from Markdown format
+// Note: This is a best-effort parser and may not preserve all formatting
+func (s *Store) ImportMarkdown(data []byte) (*Session, error) {
+	content := string(data)
+	sess := &Session{
+		ID:        uuid.New().String(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Model:     "imported",
+	}
+
+	lines := strings.Split(content, "\n")
+	var currentRole string
+	var currentContent strings.Builder
+	inMessages := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Parse header
+		if strings.HasPrefix(trimmed, "**Model:**") {
+			sess.Model = strings.TrimSpace(strings.TrimPrefix(trimmed, "**Model:**"))
+			continue
+		}
+		if strings.HasPrefix(trimmed, "**Name:**") {
+			sess.Name = strings.TrimSpace(strings.TrimPrefix(trimmed, "**Name:**"))
+			continue
+		}
+
+		// Detect section headers
+		if strings.HasPrefix(trimmed, "## Conversation") {
+			inMessages = true
+			continue
+		}
+		if strings.HasPrefix(trimmed, "## ") {
+			inMessages = false
+			continue
+		}
+
+		// Parse messages
+		if inMessages && strings.HasPrefix(trimmed, "### ") {
+			// Save previous message if any
+			if currentRole != "" && currentContent.Len() > 0 {
+				sess.Messages = append(sess.Messages, Message{
+					Role:    currentRole,
+					Content: strings.TrimSpace(currentContent.String()),
+				})
+				currentContent.Reset()
+			}
+
+			role := strings.TrimSpace(strings.TrimPrefix(trimmed, "### "))
+			switch strings.ToLower(role) {
+			case "user":
+				currentRole = "user"
+			case "assistant":
+				currentRole = "assistant"
+			case "system":
+				currentRole = "system"
+			default:
+				currentRole = "unknown"
+			}
+			continue
+		}
+
+		// Accumulate message content
+		if currentRole != "" && trimmed != "" {
+			if currentContent.Len() > 0 {
+				currentContent.WriteString("\n")
+			}
+			currentContent.WriteString(trimmed)
+		}
+	}
+
+	// Don't forget the last message
+	if currentRole != "" && currentContent.Len() > 0 {
+		sess.Messages = append(sess.Messages, Message{
+			Role:    currentRole,
+			Content: strings.TrimSpace(currentContent.String()),
+		})
+	}
+
+	if len(sess.Messages) == 0 {
+		return nil, fmt.Errorf("no messages found in markdown")
+	}
+
+	return sess, nil
+}
+
+// validateSession checks if a session has required fields
+func validateSession(sess *Session) error {
+	if sess.ID == "" {
+		return fmt.Errorf("session ID is required")
+	}
+	if sess.Model == "" {
+		return fmt.Errorf("session model is required")
+	}
+	if len(sess.Messages) == 0 {
+		return fmt.Errorf("session must have at least one message")
+	}
+	for i, msg := range sess.Messages {
+		if msg.Role == "" {
+			return fmt.Errorf("message %d has empty role", i)
+		}
+		if msg.Content == "" {
+			return fmt.Errorf("message %d has empty content", i)
+		}
+	}
+	return nil
+}
+
+// ImportAndSave imports a session and saves it to the store
+func (s *Store) ImportAndSave(data []byte, format string) (*Session, error) {
+	var sess *Session
+	var err error
+
+	switch format {
+	case "json":
+		sess, err = s.ImportSession(data)
+	case "md", "markdown":
+		sess, err = s.ImportMarkdown(data)
+	default:
+		return nil, fmt.Errorf("unsupported import format: %s", format)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Save to store
+	if err := s.save(sess); err != nil {
+		return nil, fmt.Errorf("save imported session: %w", err)
+	}
+
+	return sess, nil
+}

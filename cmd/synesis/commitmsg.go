@@ -10,10 +10,11 @@ import (
 
 	"synesis.sh/synesis/internal/api"
 	"synesis.sh/synesis/pkg/config"
+	"synesis.sh/synesis/pkg/ui"
 )
 
 // runCommitMessage generates commit messages from git diff
-func runCommitMessage(args []string, noColor, quiet bool) error {
+func runCommitMessage(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("commit-message", flag.ContinueOnError)
 	fs.SetOutput(nil)
 	model := fs.String("model", "", "model to use")
@@ -22,8 +23,19 @@ func runCommitMessage(args []string, noColor, quiet bool) error {
 	output := fs.String("output", "text", "output format: text, json")
 	conventional := fs.Bool("conventional", false, "conventional commits format")
 	notify := fs.String("notify", "", "notify scope (e.g., api, ui)")
+	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 
 	fs.Parse(args)
+
+	// Parse render mode
+	renderMode := ui.RenderPlain
+	if *renderModeStr != "" {
+		m, err := ui.ParseRenderMode(*renderModeStr)
+		if err != nil {
+			return fmt.Errorf("render mode: %w", err)
+		}
+		renderMode = m
+	}
 
 	// Read stdin or use git diff
 	var content string
@@ -72,7 +84,7 @@ func runCommitMessage(args []string, noColor, quiet bool) error {
 	prompt.WriteString("\n\nRespond ONLY with the commit message, no explanation.")
 
 	// Load config
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
@@ -123,9 +135,12 @@ func runCommitMessage(args []string, noColor, quiet bool) error {
 
 	switch *output {
 	case "json":
-		fmt.Fprintf(os.Stdout, `{"commit_message": %s}`+"\n", jsonMarshal(msg))
+		jsonOutput := fmt.Sprintf(`{"commit_message": %s}`, jsonMarshal(msg))
+		rendered := ui.RenderResponse(jsonOutput, renderMode, noColor, ui.IsTerminal())
+		fmt.Fprintln(os.Stdout, rendered)
 	default:
-		fmt.Println(msg)
+		rendered := ui.RenderResponse(msg, renderMode, noColor, ui.IsTerminal())
+		fmt.Println(rendered)
 	}
 
 	return nil

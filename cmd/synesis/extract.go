@@ -11,6 +11,7 @@ import (
 
 	"synesis.sh/synesis/internal/api"
 	"synesis.sh/synesis/pkg/config"
+	"synesis.sh/synesis/pkg/ui"
 )
 
 // stringSliceValue implements flag.Value for repeatable string flags
@@ -28,7 +29,7 @@ func (v *stringSliceValue) String() string {
 }
 
 // runExtract implements structured field extraction
-func runExtract(args []string, noColor, quiet bool) error {
+func runExtract(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("extract", flag.ContinueOnError)
 	fs.SetOutput(nil)
 	model := fs.String("model", "", "model to use")
@@ -39,6 +40,7 @@ func runExtract(args []string, noColor, quiet bool) error {
 	fs.Var(&stringSliceValue{&fieldList}, "field", "field to extract (can repeat)")
 	_ = fs.String("schema", "", "JSON schema file")
 	metadata := fs.Bool("metadata", false, "include uncertainty metadata")
+	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 	output := fs.String("output", "json", "output format: json")
 
 	// Parse with custom handling
@@ -48,6 +50,16 @@ func runExtract(args []string, noColor, quiet bool) error {
 			return nil
 		}
 		// Continue on error to allow manual handling
+	}
+
+	// Parse render mode
+	renderMode := ui.RenderPlain
+	if *renderModeStr != "" {
+		m, err := ui.ParseRenderMode(*renderModeStr)
+		if err != nil {
+			return fmt.Errorf("render mode: %w", err)
+		}
+		renderMode = m
 	}
 
 	// Get the parsed fields from the var
@@ -61,7 +73,7 @@ func runExtract(args []string, noColor, quiet bool) error {
 	hasStdin := (stat.Mode() & os.ModeCharDevice) == 0
 
 	// Load config
-	cfg, err := config.Resolve()
+	cfg, err := config.Resolve(profileName)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
@@ -200,10 +212,12 @@ func runExtract(args []string, noColor, quiet bool) error {
 	switch *output {
 	case "json":
 		data, _ := json.MarshalIndent(result, "", "  ")
-		fmt.Println(string(data))
+		rendered := ui.RenderResponse(string(data), renderMode, noColor, ui.IsTerminal())
+		fmt.Println(rendered)
 	default:
 		data, _ := json.Marshal(result)
-		fmt.Println(string(data))
+		rendered := ui.RenderResponse(string(data), renderMode, noColor, ui.IsTerminal())
+		fmt.Println(rendered)
 	}
 
 	return nil
