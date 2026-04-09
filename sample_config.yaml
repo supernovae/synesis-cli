@@ -1,0 +1,20 @@
+# Synesis Configuration
+
+# API Configuration
+# base_url: The OpenAI-compatible API endpoint
+base_url: https://api.openai.com/v1
+
+# api_key: Your API key (use environment variable for security)
+# api_key: sk-... (or set SYNESIS_API_KEY env var)
+
+# Model configuration
+model: gpt-4o-mini
+
+# Timeout in seconds (default: 120)
+timeout: 120
+
+# Endpoint type: chat/completions or responses
+endpoint: chat/completions
+
+# Organization ID (optional, for OpenAI orgs)
+# org_id: org-xxx

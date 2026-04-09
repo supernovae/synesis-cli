@@ -1,0 +1,41 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - gofmt
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - goimports
+    - misspell
+    - unconvert
+    - unparam
+    - gocritic
+    - gosec
+    - goheader
+    - prealloc
+
+linters-settings:
+  goheader:
+    template: |
+      SPDX-License-Identifier: Apache-2.0
+      Copyright (c) {{ year }} The synesis Authors
+  gosec:
+    excludes:
+      - G104 # IO errors are not checked
+  govet:
+    check-shadowing: true
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  print-issued-lines: false
+  sort-results: true

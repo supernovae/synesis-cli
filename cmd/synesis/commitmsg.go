@@ -1,0 +1,132 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"synesis.sh/synesis/internal/api"
+	"synesis.sh/synesis/pkg/config"
+)
+
+// runCommitMessage generates commit messages from git diff
+func runCommitMessage(args []string, noColor, quiet bool) error {
+	fs := flag.NewFlagSet("commit-message", flag.ContinueOnError)
+	fs.SetOutput(nil)
+	model := fs.String("model", "", "model to use")
+	temperature := fs.Float64("temperature", 0.5, "temperature")
+	timeout := fs.Int("timeout", 60, "timeout in seconds")
+	output := fs.String("output", "text", "output format: text, json")
+	conventional := fs.Bool("conventional", false, "conventional commits format")
+	notify := fs.String("notify", "", "notify scope (e.g., api, ui)")
+
+	fs.Parse(args)
+
+	// Read stdin or use git diff
+	var content string
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		// Piped
+		data, _ := os.ReadFile("/dev/stdin")
+		content = strings.TrimSpace(string(data))
+	} else {
+		// Try git diff
+		data, _ := os.ReadFile("/dev/stdin") // This will be empty, try running git diff
+		// Actually we need to check if there's a git repo and get diff
+		_ = data
+		// For now, require stdin if no args
+	}
+
+	if content == "" && len(fs.Args()) > 0 {
+		// Try reading from file args
+		for _, f := range fs.Args() {
+			data, err := os.ReadFile(f)
+			if err != nil {
+				continue
+			}
+			content += string(data) + "\n"
+		}
+	}
+
+	if content == "" {
+		return fmt.Errorf("no input: provide via stdin or file arguments (use -h for help)")
+	}
+
+	// Build commit message prompt
+	var prompt strings.Builder
+	prompt.WriteString("Generate a commit message for the following changes.\n\n")
+	prompt.WriteString("Changes:\n")
+	prompt.WriteString(content)
+
+	if *conventional {
+		prompt.WriteString("\n\nUse conventional commit format: <type>(<scope>): <description>")
+		if *notify != "" {
+			prompt.WriteString("\nScope: " + *notify)
+		}
+		prompt.WriteString("\nTypes: feat, fix, docs, style, refactor, test, chore")
+	}
+
+	prompt.WriteString("\n\nRespond ONLY with the commit message, no explanation.")
+
+	// Load config
+	cfg, err := config.Resolve()
+	if err != nil {
+		return fmt.Errorf("config error: %w", err)
+	}
+
+	if err := cfg.Cfg.Validate(); err != nil {
+		return err
+	}
+
+	// Model
+	modelName := cfg.Cfg.Model
+	if *model != "" {
+		modelName = *model
+	}
+	if modelName == "" {
+		modelName = "gpt-4o-mini"
+	}
+
+	// Request
+	messages := []api.Message{
+		{Role: "system", Content: "You are an expert at writing concise, descriptive commit messages. Format them clearly."},
+		{Role: "user", Content: prompt.String()},
+	}
+
+	req := &api.ChatRequest{
+		Model:       modelName,
+		Messages:    messages,
+		Temperature: *temperature,
+	}
+
+	// Execute
+	cli := api.NewClient(cfg.Cfg.BaseURL, cfg.Cfg.APIKey)
+	defer cli.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
+	defer cancel()
+
+	resp, err := cli.Chat(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if len(resp.Choices) == 0 {
+		return fmt.Errorf("no response")
+	}
+
+	msg := resp.Choices[0].Message.Content
+	msg = strings.TrimSpace(msg)
+
+	switch *output {
+	case "json":
+		fmt.Fprintf(os.Stdout, `{"commit_message": %s}`+"\n", jsonMarshal(msg))
+	default:
+		fmt.Println(msg)
+	}
+
+	return nil
+}
