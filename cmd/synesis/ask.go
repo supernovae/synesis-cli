@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -25,6 +26,8 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 	output := fs.String("output", "text", "output format: text, json, ndjson")
 	raw := fs.Bool("raw", false, "raw output")
 	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
+	toolsFile := fs.String("tools", "", "JSON file with tool definitions")
+	toolChoice := fs.String("tool-choice", "auto", "tool choice: auto, none, required")
 	noStream := fs.Bool("no-stream", false, "disable streaming")
 	includeStdin := fs.Bool("include-stdin", true, "include stdin in prompt")
 
@@ -97,15 +100,35 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 
 	messages = append(messages, api.Message{Role: "user", Content: prompt.String()})
 
+	// Load tools if specified
+	var tools []api.Tool
+	if *toolsFile != "" {
+		data, err := os.ReadFile(*toolsFile)
+		if err != nil {
+			return fmt.Errorf("read tools file: %w", err)
+		}
+		if err := json.Unmarshal(data, &tools); err != nil {
+			return fmt.Errorf("parse tools JSON: %w", err)
+		}
+	}
+
 	// Build request
 	req := &api.ChatRequest{
 		Model:         modelName,
 		Messages:      messages,
 		Temperature:   *temperature,
-		Stream:        !*noStream && ui.IsTerminal(), // Stream in terminal
+		Stream:        !*noStream && ui.IsTerminal(),
+		Tools:         tools,
 	}
 	if *maxTokens > 0 {
 		req.MaxTokens = *maxTokens
+	}
+	if *toolChoice != "" && *toolChoice != "auto" {
+		if *toolChoice == "none" {
+			req.ToolChoice = "none"
+		} else if *toolChoice == "required" {
+			req.ToolChoice = "required"
+		}
 	}
 
 	// Create client
@@ -200,6 +223,8 @@ Options:
   -output text|json|ndjson   output format (default text)
   -raw                 raw output (no newline)
   -render string       render mode: plain, markdown, raw (default "plain")
+  -tools file          JSON file with tool definitions
+  -tool-choice string  tool choice: auto, none, required (default "auto")
   -no-stream           disable streaming
   -include-stdin bool  include stdin in prompt (default true)
 
@@ -208,6 +233,7 @@ Examples:
   echo "hello world" | synesis ask "translate to french"
   synesis ask --output json "list 3 colors"
   synesis ask --render markdown "explain closures"
+  synesis ask --tools functions.json --tool-choice required "extract data"
   cat log.txt | synesis ask "find errors"
 
 `)

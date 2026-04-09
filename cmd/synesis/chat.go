@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -41,6 +42,8 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 	includeStdin := fs.Bool("include-stdin", false, "include stdin in prompt")
 	raw := fs.Bool("raw", false, "output raw response without formatting")
 	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
+	toolsFile := fs.String("tools", "", "JSON file with tool definitions")
+	toolChoice := fs.String("tool-choice", "auto", "tool choice: auto, none, required")
 	output := fs.String("output", "text", "output format: text, json, ndjson")
 
 	fs.Parse(args)
@@ -130,14 +133,34 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		return fmt.Errorf("no prompt provided")
 	}
 
+	// Load tools if specified
+	var tools []api.Tool
+	if *toolsFile != "" {
+		data, err := os.ReadFile(*toolsFile)
+		if err != nil {
+			return fmt.Errorf("read tools file: %w", err)
+		}
+		if err := json.Unmarshal(data, &tools); err != nil {
+			return fmt.Errorf("parse tools JSON: %w", err)
+		}
+	}
+
 	// Build request
 	req := &api.ChatRequest{
 		Model:       modelName,
 		Messages:    messages,
 		Temperature: *temperature,
+		Tools:       tools,
 	}
 	if *maxTokens > 0 {
 		req.MaxTokens = *maxTokens
+	}
+	if *toolChoice != "" && *toolChoice != "auto" {
+		if *toolChoice == "none" {
+			req.ToolChoice = "none"
+		} else if *toolChoice == "required" {
+			req.ToolChoice = "required"
+		}
 	}
 
 	// Create client
