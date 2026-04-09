@@ -42,6 +42,8 @@ func runExtract(args []string, noColor, quiet bool, profileName string) error {
 	metadata := fs.Bool("metadata", false, "include uncertainty metadata")
 	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 	output := fs.String("output", "json", "output format: json")
+	dryRun := fs.Bool("dry-run", false, "show request that would be sent without making API call")
+	showUsage := fs.Bool("usage", false, "show token usage and latency after response")
 
 	// Parse with custom handling
 	if err := fs.Parse(args); err != nil {
@@ -136,6 +138,13 @@ func runExtract(args []string, noColor, quiet bool, profileName string) error {
 		ResponseFormat: api.ResponseFormat{Type: "json_object"},
 	}
 
+	// Handle dry-run mode
+	if *dryRun {
+		outputJSON := *output == "json" || *output == "ndjson"
+		ui.PrintDryRun(cfg, req, outputJSON)
+		return nil
+	}
+
 	// Create client
 	cli := api.NewClient(cfg.Cfg.BaseURL, cfg.Cfg.APIKey)
 	defer cli.Close()
@@ -143,6 +152,9 @@ func runExtract(args []string, noColor, quiet bool, profileName string) error {
 	// Setup context
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
+
+	// Track timing for usage reporting
+	startTime := time.Now()
 
 	// Execute
 	resp, err := cli.Chat(ctx, req)
@@ -206,6 +218,12 @@ func runExtract(args []string, noColor, quiet bool, profileName string) error {
 			"extracted_from": "input",
 			"model":          modelName,
 		}
+	}
+
+	// Show usage if requested
+	if *showUsage {
+		latencyMs := time.Since(startTime).Milliseconds()
+		ui.PrintUsage(modelName, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, latencyMs)
 	}
 
 	// Output

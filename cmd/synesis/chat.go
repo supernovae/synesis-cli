@@ -45,6 +45,8 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 	toolsFile := fs.String("tools", "", "JSON file with tool definitions")
 	toolChoice := fs.String("tool-choice", "auto", "tool choice: auto, none, required")
 	output := fs.String("output", "text", "output format: text, json, ndjson")
+	dryRun := fs.Bool("dry-run", false, "show request that would be sent without making API call")
+	showUsage := fs.Bool("usage", false, "show token usage and latency after response")
 
 	fs.Parse(args)
 
@@ -163,6 +165,13 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		}
 	}
 
+	// Handle dry-run mode
+	if *dryRun {
+		outputJSON := *output == "json" || *output == "ndjson"
+		ui.PrintDryRun(cfg, req, outputJSON)
+		return nil
+	}
+
 	// Create client
 	cli := api.NewClient(cfg.Cfg.BaseURL, cfg.Cfg.APIKey)
 	defer cli.Close()
@@ -174,6 +183,9 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(*timeout)*time.Second)
 		defer cancel()
 	}
+
+	// Track timing for usage reporting
+	startTime := time.Now()
 
 	// Determine output mode
 	var outputMode ui.OutputMode
@@ -225,6 +237,12 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		}
 
 		finalContent = resp.Choices[0].Message.Content
+
+		// Show usage if requested
+		if *showUsage {
+			latencyMs := time.Since(startTime).Milliseconds()
+			ui.PrintUsage(modelName, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, latencyMs)
+		}
 
 		// Handle output format for non-streaming
 		switch outputMode {

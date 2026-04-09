@@ -23,8 +23,15 @@ func runSummarize(args []string, noColor, quiet bool, profileName string) error 
 	output := fs.String("output", "text", "output format: text, json")
 	short := fs.Bool("short", false, "short summary")
 	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
+	dryRun := fs.Bool("dry-run", false, "show request that would be sent without making API call")
+	showUsage := fs.Bool("usage", false, "show token usage and latency after response")
 
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			printSummarizeUsage()
+			return nil
+		}
+	}
 
 	// Check for stdin
 	stat, _ := os.Stdin.Stat()
@@ -84,12 +91,22 @@ func runSummarize(args []string, noColor, quiet bool, profileName string) error 
 		Temperature: *temperature,
 	}
 
+	// Handle dry-run mode
+	if *dryRun {
+		outputJSON := *output == "json" || *output == "ndjson"
+		ui.PrintDryRun(cfg, req, outputJSON)
+		return nil
+	}
+
 	// Execute
 	cli := api.NewClient(cfg.Cfg.BaseURL, cfg.Cfg.APIKey)
 	defer cli.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 	defer cancel()
+
+	// Track timing for usage reporting
+	startTime := time.Now()
 
 	resp, err := cli.Chat(ctx, req)
 	if err != nil {
@@ -101,6 +118,12 @@ func runSummarize(args []string, noColor, quiet bool, profileName string) error 
 	}
 
 	content = resp.Choices[0].Message.Content
+
+	// Show usage if requested
+	if *showUsage {
+		latencyMs := time.Since(startTime).Milliseconds()
+		ui.PrintUsage(modelName, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, latencyMs)
+	}
 
 	// Parse render mode
 	renderMode := ui.RenderPlain
@@ -122,4 +145,27 @@ func runSummarize(args []string, noColor, quiet bool, profileName string) error 
 	}
 
 	return nil
+}
+
+func printSummarizeUsage() {
+	fmt.Print(`synesis summarize - Summarize input text
+
+Usage: synesis summarize [options]
+
+Options:
+  -model string        model to use
+  -temperature float   temperature (default 0.5)
+  -timeout int         timeout in seconds (default 120)
+  -output string       output format: text, json (default "text")
+  -short               short summary (1-2 sentences)
+  -render string       render mode: plain, markdown, raw (default "plain")
+  -dry-run             show request that would be sent without making API call
+  -usage               show token usage and latency after response
+
+Examples:
+  cat article.txt | synesis summarize
+  cat report.pdf | synesis summarize --short
+  echo "Some text" | synesis summarize --usage
+
+`)
 }

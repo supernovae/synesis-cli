@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -8,6 +9,9 @@ import (
 	"strings"
 
 	"github.com/mattn/go-isatty"
+
+	"synesis.sh/synesis/internal/api"
+	"synesis.sh/synesis/pkg/config"
 )
 
 // IsTerminal returns true if stdout is a terminal
@@ -278,4 +282,95 @@ func StripMarkdown(content string) string {
 	result = linkRegex.ReplaceAllString(result, "$1")
 
 	return result
+}
+
+// DryRunOutput holds dry-run display data
+type DryRunOutput struct {
+	BaseURL    string `json:"base_url"`
+	Model      string `json:"model"`
+	Endpoint   string `json:"endpoint"`
+	Timeout    int    `json:"timeout"`
+	APIKey     string `json:"api_key"`
+	OrgID      string `json:"org_id,omitempty"`
+	Messages   []api.Message `json:"messages"`
+	Temperature float64 `json:"temperature,omitempty"`
+	MaxTokens  int    `json:"max_tokens,omitempty"`
+	Tools      []api.Tool `json:"tools,omitempty"`
+	ToolChoice interface{} `json:"tool_choice,omitempty"`
+}
+
+// PrintDryRun displays the request that would be sent without making the API call
+// If outputJSON is true, outputs to stdout as JSON; otherwise outputs human-readable to stderr
+func PrintDryRun(cfg *config.LoadedConfig, req *api.ChatRequest, outputJSON bool) {
+	// Prepare output with redacted API key
+	apiKey := cfg.Cfg.APIKey
+	if apiKey != "" {
+		apiKey = config.RedactedSecret
+	}
+
+	dryRun := DryRunOutput{
+		BaseURL:     cfg.Cfg.BaseURL,
+		Model:       req.Model,
+		Endpoint:    cfg.Cfg.Endpoint,
+		Timeout:     cfg.Cfg.Timeout,
+		APIKey:      apiKey,
+		OrgID:       cfg.Cfg.OrgID,
+		Messages:    req.Messages,
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		Tools:       req.Tools,
+		ToolChoice:  req.ToolChoice,
+	}
+
+	if outputJSON {
+		data, err := json.MarshalIndent(dryRun, "", "  ")
+		if err != nil {
+			Error("dry-run JSON marshal error: %v", err)
+			return
+		}
+		fmt.Println(string(data))
+		return
+	}
+
+	// Human-readable output to stderr
+	fmt.Fprintln(os.Stderr, "=== DRY RUN: Request that would be sent ===")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, "Resolved Configuration:\n")
+	fmt.Fprintf(os.Stderr, "  Base URL: %s\n", dryRun.BaseURL)
+	fmt.Fprintf(os.Stderr, "  Model: %s\n", dryRun.Model)
+	fmt.Fprintf(os.Stderr, "  Endpoint: %s\n", dryRun.Endpoint)
+	fmt.Fprintf(os.Stderr, "  Timeout: %ds\n", dryRun.Timeout)
+	if dryRun.OrgID != "" {
+		fmt.Fprintf(os.Stderr, "  Org ID: %s\n", dryRun.OrgID)
+	}
+	fmt.Fprintf(os.Stderr, "  API Key: %s\n", dryRun.APIKey)
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, "Request Payload:\n")
+
+	// Marshal just the request for display
+	reqData, _ := json.MarshalIndent(map[string]interface{}{
+		"model":         req.Model,
+		"messages":      req.Messages,
+		"temperature":   req.Temperature,
+		"max_tokens":    req.MaxTokens,
+		"tools":         req.Tools,
+		"tool_choice":   req.ToolChoice,
+	}, "", "  ")
+	fmt.Fprintln(os.Stderr, string(reqData))
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "=== END DRY RUN ===")
+}
+
+// PrintUsage displays token usage and latency information to stderr
+func PrintUsage(model string, promptTokens, completionTokens, totalTokens int, latencyMs int64) {
+	if totalTokens == 0 {
+		return // No usage data
+	}
+
+	fmt.Fprintf(os.Stderr, "\n[%s] Tokens: %d in / %d out / %d total | Latency: %dms\n",
+		model,
+		promptTokens,
+		completionTokens,
+		totalTokens,
+		latencyMs)
 }

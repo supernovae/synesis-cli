@@ -24,8 +24,15 @@ func runCommitMessage(args []string, noColor, quiet bool, profileName string) er
 	conventional := fs.Bool("conventional", false, "conventional commits format")
 	notify := fs.String("notify", "", "notify scope (e.g., api, ui)")
 	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
+	dryRun := fs.Bool("dry-run", false, "show request that would be sent without making API call")
+	showUsage := fs.Bool("usage", false, "show token usage and latency after response")
 
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			printCommitMessageUsage()
+			return nil
+		}
+	}
 
 	// Parse render mode
 	renderMode := ui.RenderPlain
@@ -114,6 +121,16 @@ func runCommitMessage(args []string, noColor, quiet bool, profileName string) er
 		Temperature: *temperature,
 	}
 
+	// Handle dry-run mode
+	if *dryRun {
+		outputJSON := *output == "json" || *output == "ndjson"
+		ui.PrintDryRun(cfg, req, outputJSON)
+		return nil
+	}
+
+	// Track timing for usage reporting
+	startTime := time.Now()
+
 	// Execute
 	cli := api.NewClient(cfg.Cfg.BaseURL, cfg.Cfg.APIKey)
 	defer cli.Close()
@@ -133,6 +150,12 @@ func runCommitMessage(args []string, noColor, quiet bool, profileName string) er
 	msg := resp.Choices[0].Message.Content
 	msg = strings.TrimSpace(msg)
 
+	// Show usage if requested
+	if *showUsage {
+		latencyMs := time.Since(startTime).Milliseconds()
+		ui.PrintUsage(modelName, resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens, latencyMs)
+	}
+
 	switch *output {
 	case "json":
 		jsonOutput := fmt.Sprintf(`{"commit_message": %s}`, jsonMarshal(msg))
@@ -144,4 +167,28 @@ func runCommitMessage(args []string, noColor, quiet bool, profileName string) er
 	}
 
 	return nil
+}
+
+func printCommitMessageUsage() {
+	fmt.Print(`synesis commit-message - Generate commit messages from git diff
+
+Usage: synesis commit-message [options]
+
+Options:
+  -model string        model to use
+  -temperature float   temperature (default 0.5)
+  -timeout int         timeout in seconds (default 60)
+  -output string       output format: text, json (default "text")
+  -conventional        use conventional commits format
+  -notify string       notify scope (e.g., api, ui)
+  -render string       render mode: plain, markdown, raw (default "plain")
+  -dry-run             show request that would be sent without making API call
+  -usage               show token usage and latency after response
+
+Examples:
+  git diff | synesis commit-message
+  git diff | synesis commit-message --conventional
+  git diff | synesis commit-message --usage
+
+`)
 }
