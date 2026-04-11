@@ -1,16 +1,65 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 // ExtractPath extracts a value from a JSON string using dot notation
 func ExtractPath(jsonStr string, path string) (string, error) {
-	// For now, return a simple placeholder implementation
-	// This will be expanded with a proper JSON parser in a later phase
-	return "", fmt.Errorf("not yet implemented")
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return "", fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	components := strings.Split(path, ".")
+	current := data
+
+	for _, component := range components {
+		switch v := current.(type) {
+		case map[string]interface{}:
+			if val, ok := v[component]; ok {
+				current = val
+			} else {
+				return "", fmt.Errorf("path not found: %s", path)
+			}
+		case []interface{}:
+			if idx, err := strconv.Atoi(component); err == nil {
+				if idx >= 0 && idx < len(v) {
+					current = v[idx]
+				} else {
+					return "", fmt.Errorf("array index out of bounds: %d", idx)
+				}
+			} else {
+				return "", fmt.Errorf("invalid array index: %s", component)
+			}
+		default:
+			return "", fmt.Errorf("cannot navigate into %T at %s", current, component)
+		}
+	}
+
+	switch v := current.(type) {
+	case string:
+		return v, nil
+	case nil:
+		return "null", nil
+	case bool:
+		return strconv.FormatBool(v), nil
+	case float64:
+		if v == float64(int64(v)) {
+			return strconv.FormatInt(int64(v), 10), nil
+		}
+		return strconv.FormatFloat(v, 'f', -1, 64), nil
+	default:
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal result: %w", err)
+		}
+		return string(jsonBytes), nil
+	}
 }
 
 // WriteOutput writes content to a file
@@ -33,21 +82,6 @@ func WriteOutputMode(filepath string, content string, appendMode bool) error {
 			return fmt.Errorf("failed to open file for append: %w", err)
 		}
 	} else {
-		// Create parent directories if needed
-		dir := filepath
-		for !strings.HasPrefix(dir, ".") && dir != "." && dir != "/" {
-			if _, err := os.Stat(dir); err == nil {
-				// Found the first existing parent directory
-				if err := os.MkdirAll(dir, 0755); err != nil {
-					return fmt.Errorf("failed to create parent dirs: %w", err)
-				}
-				break
-			}
-			dir = filepath
-			for dir != "/" && !strings.Contains(dir, "/") {
-				break
-			}
-		}
 		f, err = os.Create(filepath)
 		if err != nil {
 			return fmt.Errorf("failed to create file: %w", err)
@@ -63,7 +97,7 @@ func WriteOutputMode(filepath string, content string, appendMode bool) error {
 	return nil
 }
 
-// GetOutputPath resolves an output path, creating parent directories if needed
+// GetOutputPath resolves an output path
 func GetOutputPath(path string) (string, error) {
 	return path, nil
 }
