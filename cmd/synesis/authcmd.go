@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"synesis.sh/synesis/pkg/config"
+	"synesis.sh/synesis/pkg/keychain"
 	"synesis.sh/synesis/pkg/ui"
 )
 
@@ -19,8 +20,21 @@ func runAuth(args []string, noColor, quiet bool, profileName string) error {
 	setToken := fs.String("set-token", "", "set token in config file")
 	setURL := fs.String("set-url", "", "set URL in config file")
 	printToken := fs.Bool("show-token", false, "show current token")
+	useKeychain := fs.Bool("use-keychain", false, "store/retrieve token from system keychain")
+	clearKeychain := fs.Bool("clear-keychain", false, "remove token from system keychain")
 
 	fs.Parse(args)
+
+	// Handle clear-keychain
+	if *clearKeychain {
+		if err := keychain.DeleteAPIKey(); err != nil {
+			return fmt.Errorf("clear keychain: %w", err)
+		}
+		if !quiet {
+			fmt.Println("Token removed from system keychain")
+		}
+		return nil
+	}
 
 	cfg, err := config.Resolve(profileName)
 	if err != nil {
@@ -29,7 +43,17 @@ func runAuth(args []string, noColor, quiet bool, profileName string) error {
 
 	// Handle set-token
 	if *setToken != "" {
-		return writeConfigValue("api_key", *setToken, quiet)
+		if *useKeychain {
+			if err := keychain.SetAPIKey(*setToken); err != nil {
+				return fmt.Errorf("keychain: %w", err)
+			}
+			if !quiet {
+				fmt.Println("Token stored in system keychain")
+			}
+		} else {
+			return writeConfigValue("api_key", *setToken, quiet)
+		}
+		return nil
 	}
 
 	// Handle set-url
@@ -45,6 +69,13 @@ func runAuth(args []string, noColor, quiet bool, profileName string) error {
 				cfg.Cfg.BaseURL = *baseURL
 			}
 			if *token != "" {
+				if *useKeychain {
+					if err := keychain.SetAPIKey(*token); err != nil {
+						return fmt.Errorf("keychain: %w", err)
+					}
+					fmt.Println("URL set; token stored in system keychain")
+					return nil
+				}
 				cfg.Cfg.APIKey = *token
 			}
 			if err := cfg.Cfg.Validate(); err != nil {
@@ -69,14 +100,34 @@ func runAuth(args []string, noColor, quiet bool, profileName string) error {
 				ui.Color("not set", ui.ColorGray, false))
 		}
 
+		// Check keychain first if --use-keychain or keychain has a key
+		hasKC, kcErr := keychain.HasAPIKey()
+		tokenFromKeychain := hasKC && kcErr == nil
+
 		if *printToken {
+			if tokenFromKeychain {
+				if key, err := keychain.GetAPIKey(); err == nil {
+					fmt.Printf("  %s  %s\n",
+						ui.Color("Token:", ui.ColorCyan, false),
+						key)
+				}
+			} else if cfg.Cfg.APIKey != "" {
+				fmt.Printf("  %s  %s\n",
+					ui.Color("Token:", ui.ColorCyan, false),
+					cfg.Cfg.APIKey)
+			} else {
+				fmt.Printf("  %s  %s\n",
+					ui.Color("Token:", ui.ColorCyan, false),
+					ui.Color("not set", ui.ColorGray, false))
+			}
+		} else if tokenFromKeychain {
 			fmt.Printf("  %s  %s\n",
 				ui.Color("Token:", ui.ColorCyan, false),
-				cfg.Cfg.APIKey)
+				ui.Color("[SET] (keychain)", ui.ColorGreen, false))
 		} else if cfg.Cfg.APIKey != "" {
 			fmt.Printf("  %s  %s\n",
 				ui.Color("Token:", ui.ColorCyan, false),
-				ui.Color("[SET]", ui.ColorGreen, false))
+				ui.Color("[SET] (config)", ui.ColorGreen, false))
 		} else {
 			fmt.Printf("  %s  %s\n",
 				ui.Color("Token:", ui.ColorCyan, false),

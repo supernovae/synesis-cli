@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"synesis.sh/synesis/internal/api"
+	"synesis.sh/synesis/pkg/bundle"
+	"synesis.sh/synesis/pkg/clipboard"
 	"synesis.sh/synesis/pkg/config"
 	"synesis.sh/synesis/pkg/ui"
 )
@@ -30,8 +32,11 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 	toolChoice := fs.String("tool-choice", "auto", "tool choice: auto, none, required")
 	noStream := fs.Bool("no-stream", false, "disable streaming")
 	includeStdin := fs.Bool("include-stdin", true, "include stdin in prompt")
+	fromClipboard := fs.Bool("from-clipboard", false, "read prompt from clipboard")
+	copyLast := fs.Bool("copy-last", false, "copy last response to clipboard")
 	dryRun := fs.Bool("dry-run", false, "show request that would be sent without making API call")
 	showUsage := fs.Bool("usage", false, "show token usage and latency after response")
+	bundlePath := fs.String("bundle", "", "bundle file to load (YAML format)")
 
 	// Parse, capturing error but not printing
 	if err := fs.Parse(args); err != nil {
@@ -69,16 +74,62 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 	// Build messages
 	var messages []api.Message
 
-	// Add system prompt if provided
-	if *system != "" {
-		messages = append(messages, api.Message{Role: "system", Content: *system})
+	// Load bundle if specified
+	var bundlePrompt strings.Builder
+	var bundleSystem string
+	// bundleFiles reserved for future use (file references from bundle)
+	if *bundlePath != "" {
+		b, err := bundle.Load(*bundlePath)
+		if err != nil {
+			return fmt.Errorf("load bundle: %w", err)
+		}
+		if err := b.Validate(); err != nil {
+			return fmt.Errorf("bundle validation: %w", err)
+		}
+		bundleSystem = b.GetSystem()
+		bundlePromptStr, err := b.GetPrompt()
+		if err != nil {
+			return fmt.Errorf("bundle prompt: %w", err)
+		}
+		bundlePrompt.WriteString(bundlePromptStr)
+	}
+
+	// Add system prompt from bundle or flag (flag overrides bundle)
+	finalSystem := *system
+	if finalSystem == "" && bundleSystem != "" {
+		finalSystem = bundleSystem
+	}
+	if finalSystem != "" {
+		messages = append(messages, api.Message{Role: "system", Content: finalSystem})
 	}
 
 	// Build user prompt
 	var prompt strings.Builder
 
-	// First add positional args
-	if len(fs.Args()) > 0 {
+	// Add bundle prompt first
+	if bundlePrompt.Len() > 0 {
+		prompt.WriteString(bundlePrompt.String())
+	}
+
+	// Add clipboard content if requested
+	if *fromClipboard {
+		clipboardText, err := clipboard.Paste()
+		if err != nil {
+			return fmt.Errorf("failed to read from clipboard: %w", err)
+		}
+		if clipboardText != "" {
+			if prompt.Len() > 0 {
+				prompt.WriteString("\n\n")
+			}
+			prompt.WriteString(clipboardText)
+		}
+	}
+
+	// First add positional args (if not from clipboard)
+	if len(fs.Args()) > 0 && !*fromClipboard {
+		if prompt.Len() > 0 {
+			prompt.WriteString("\n\n")
+		}
 		prompt.WriteString(strings.Join(fs.Args(), " "))
 	}
 
@@ -171,16 +222,17 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 	}
 
 	isFrontend := ui.IsTerminal() && !*noStream
+	var content string
 
 	if isFrontend {
 		// Streaming mode for terminal
-		var content strings.Builder
+		var contentBuilder strings.Builder
 		err := cli.StreamChat(ctx, req, func(token string, err error) {
 			if err != nil {
 				ui.Error("%v", err)
 				return
 			}
-			content.WriteString(token)
+			contentBuilder.WriteString(token)
 			os.Stdout.WriteString(token)
 			os.Stdout.Sync()
 		})
@@ -188,6 +240,7 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 			return err
 		}
 		os.Stdout.WriteString("\n")
+		content = contentBuilder.String()
 	} else {
 		// Non-streaming for scripts
 		resp, err := cli.Chat(ctx, req)
@@ -199,7 +252,7 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 			return fmt.Errorf("no response")
 		}
 
-		content := resp.Choices[0].Message.Content
+		content = resp.Choices[0].Message.Content
 
 		// Show usage if requested
 		if *showUsage {
@@ -220,6 +273,14 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 				os.Stdout.WriteString(rendered)
 			} else {
 				fmt.Println(rendered)
+			}
+		}
+	}
+
+	if *copyLast {
+		if err := clipboard.Copy(content); err != nil {
+			if !quiet {
+				ui.Error("Failed to copy to clipboard: %v", err)
 			}
 		}
 	}
@@ -245,6 +306,9 @@ Options:
   -tool-choice string  tool choice: auto, none, required (default "auto")
   -no-stream           disable streaming
   -include-stdin bool  include stdin in prompt (default true)
+  -from-clipboard      read prompt from clipboard
+  -copy-last           copy last response to clipboard
+  -bundle file         bundle file to load (YAML format)
 
 Examples:
   synesis ask "what time is it"
@@ -253,6 +317,17 @@ Examples:
   synesis ask --render markdown "explain closures"
   synesis ask --tools functions.json --tool-choice required "extract data"
   cat log.txt | synesis ask "find errors"
+  synesis ask --bundle mybundle.yaml
+
+Bundle Format (YAML):
+  system: "You are a helpful assistant"
+  prompt: "Analyze this data"
+  files:
+    - path: data.csv
+      role: context
+  model: gpt-4o
+  temperature: 0.7
+  max_tokens: 2000
 
 `)
 }

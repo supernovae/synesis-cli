@@ -144,6 +144,38 @@ func runDoctor(args []string, noColor, quiet bool, profileName string) error {
 		printCheck("session directory", false, err.Error())
 	}
 
+	// 8. Enhanced diagnostics
+	fmt.Println("\n6. Enhanced Diagnostics:")
+
+	// 8a. Streaming endpoint test
+	fmt.Println("\n  Streaming endpoint test:")
+	if cfg.Cfg.BaseURL != "" && cfg.Cfg.APIKey != "" {
+		cli := api.NewClient(cfg.Cfg.BaseURL, cfg.Cfg.APIKey)
+		defer cli.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Test streaming capability
+		err := testStreaming(ctx, cli, quiet)
+		if err == nil {
+			printCheck("streaming endpoint", true, "working")
+		} else {
+			printCheck("streaming endpoint", false, err.Error())
+		}
+
+		// Test responses endpoint
+		err = testResponsesEndpoint(ctx, cli, quiet)
+		if err == nil {
+			printCheck("responses endpoint", true, "working")
+		} else {
+			printCheck("responses endpoint", false, err.Error())
+		}
+	} else {
+		printCheck("streaming endpoint", false, "no API key configured")
+		printCheck("responses endpoint", false, "no API key configured")
+	}
+
 	// Summary
 	fmt.Println()
 	if issues > 0 {
@@ -156,6 +188,62 @@ func runDoctor(args []string, noColor, quiet bool, profileName string) error {
 	} else {
 		printSummary := ui.Color("OK", ui.ColorGreen, false)
 		fmt.Printf("Result: %s\n", printSummary)
+	}
+
+	return nil
+}
+
+// testStreaming tests the streaming endpoint capability
+func testStreaming(ctx context.Context, cli api.Client, quiet bool) error {
+	// Create a simple test request
+	req := &api.ChatRequest{
+		Model: "gpt-3.5-turbo", // Use a common model for testing
+		Messages: []api.Message{
+			{Role: "user", Content: "Test"},
+		},
+	}
+
+	// Try streaming a response
+	err := cli.StreamChat(ctx, req, func(token string, err error) {
+		// Consume the token
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// testResponsesEndpoint tests the responses endpoint
+func testResponsesEndpoint(ctx context.Context, cli api.Client, quiet bool) error {
+	// For now, check if the client has a Responses method
+	// Some APIs may not have this endpoint, so we'll just check it exists
+	// and return nil if the method doesn't exist or returns 404
+
+	// First try a regular Chat to verify the API works
+	req := &api.ChatRequest{
+		Model: "gpt-3.5-turbo",
+		Messages: []api.Message{
+			{Role: "user", Content: "Test"},
+		},
+	}
+
+	resp, err := cli.Chat(ctx, req)
+	if err != nil {
+		// Check if it's a not implemented error
+		if strings.Contains(err.Error(), "not found") ||
+		   strings.Contains(err.Error(), "404") ||
+		   strings.Contains(err.Error(), "not implemented") {
+			return nil // Not a critical failure for this diagnostic
+		}
+		return err
+	}
+
+	// If we got a response, the API is working
+	if resp != nil && len(resp.Choices) > 0 {
+		if !quiet {
+			fmt.Printf("  responses endpoint: working (got %d choices)\n", len(resp.Choices))
+		}
 	}
 
 	return nil

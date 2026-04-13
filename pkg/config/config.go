@@ -1,12 +1,14 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"synesis.sh/synesis/pkg/keychain"
 )
 
 // Config represents the Synesis CLI configuration
@@ -165,6 +167,17 @@ func Resolve(profileName string) (*LoadedConfig, error) {
 	if v := os.Getenv("SYNESIS_ORG_ID"); v != "" {
 		cfg.OrgID = v
 		sources = append(sources, "env:SYNESIS_ORG_ID")
+	}
+
+	// Fallback: try OS keychain if API key still not resolved
+	if cfg.APIKey == "" {
+		if kcKey, err := keychain.GetAPIKey(); err == nil && kcKey != "" {
+			cfg.APIKey = kcKey
+			sources = append(sources, "keychain:synesis")
+		} else if !errors.Is(err, keychain.ErrNotFound) && !errors.Is(err, keychain.ErrNotSupported) {
+			// Log keychain errors that aren't "not found" or "unsupported" (don't fail, just note)
+			_ = err // silently ignore; keychain is best-effort
+		}
 	}
 
 	return &LoadedConfig{

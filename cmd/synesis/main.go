@@ -9,8 +9,13 @@ import (
 
 	"synesis.sh/synesis/internal/api"
 	"synesis.sh/synesis/pkg/config"
+	"synesis.sh/synesis/pkg/editor"
+	"synesis.sh/synesis/pkg/preset"
 	"synesis.sh/synesis/pkg/session"
 	"synesis.sh/synesis/pkg/ui"
+	"synesis.sh/synesis/pkg/watch"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 // Version is set by build
@@ -85,6 +90,12 @@ func main() {
 		err = runTemplate(args, *noColor, *quiet, *profile)
 	case "repl":
 		err = runREPL(args, *noColor, *quiet, *profile)
+	case "presets":
+		err = runPresets(args, *noColor, *quiet, *profile)
+	case "editor":
+		err = runEditor(args, *noColor, *quiet, *profile)
+	case "watch":
+		err = runWatch(args, *noColor, *quiet, *profile)
 	case "help", "--help", "-h":
 		printUsage()
 		os.Exit(0)
@@ -146,6 +157,9 @@ Commands:
   profile          Manage configuration profiles
   template         Manage prompt templates
   repl             Interactive REPL mode
+  presets          List available system presets
+  editor           Edit content in $EDITOR
+  watch            Watch files for changes
 
 Options:
   -version         Show version information
@@ -210,4 +224,64 @@ func sessionDir() string {
 		xdgData = "."
 	}
 	return filepath.Join(xdgData, "synesis", "sessions")
+}
+
+// Presets command
+func runPresets(args []string, noColor, quiet bool, profile string) error {
+	store, err := preset.NewStore("")
+	if err != nil {
+		return err
+	}
+
+	presets, err := store.List()
+	if err != nil {
+		return err
+	}
+
+	if len(presets) == 0 {
+		fmt.Println("No presets found")
+		return nil
+	}
+
+	fmt.Println("Available presets:")
+	for _, p := range presets {
+		fmt.Printf("  - %s", p.Name)
+		if p.Description != "" {
+			fmt.Printf(": %s", p.Description)
+		}
+		fmt.Println()
+	}
+
+	return nil
+}
+
+// Editor command
+func runEditor(args []string, noColor, quiet bool, profile string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("editor command requires a file path")
+	}
+
+	file := args[0]
+	return editor.EditFileInEditor(file)
+}
+
+// Watch command
+func runWatch(args []string, noColor, quiet bool, profile string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("watch command requires at least one file path")
+	}
+
+	w, err := watch.NewWatcher(args)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Watching files: %v\n", args)
+	fmt.Println("Press Ctrl+C to stop...")
+
+	w.SetCallback(func(event fsnotify.Event) {
+		fmt.Printf("%s: %s\n", event.Op, event.Name)
+	})
+
+	return w.Start()
 }

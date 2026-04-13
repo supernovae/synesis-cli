@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"synesis.sh/synesis/internal/api"
+	"synesis.sh/synesis/pkg/bundle"
+	"synesis.sh/synesis/pkg/clipboard"
 	"synesis.sh/synesis/pkg/config"
 	"synesis.sh/synesis/pkg/session"
 	"synesis.sh/synesis/pkg/ui"
@@ -40,6 +42,8 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 	saveSession := fs.Bool("save-session", false, "save session after chat")
 	timeout := fs.Int("timeout", 0, "timeout in seconds")
 	includeStdin := fs.Bool("include-stdin", false, "include stdin in prompt")
+	fromClipboard := fs.Bool("from-clipboard", false, "read prompt from clipboard")
+	copyLast := fs.Bool("copy-last", false, "copy last response to clipboard")
 	raw := fs.Bool("raw", false, "output raw response without formatting")
 	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 	toolsFile := fs.String("tools", "", "JSON file with tool definitions")
@@ -47,6 +51,7 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 	output := fs.String("output", "text", "output format: text, json, ndjson")
 	dryRun := fs.Bool("dry-run", false, "show request that would be sent without making API call")
 	showUsage := fs.Bool("usage", false, "show token usage and latency after response")
+	bundlePath := fs.String("bundle", "", "bundle file to load (YAML format)")
 
 	fs.Parse(args)
 
@@ -100,15 +105,52 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		}
 	}
 
-	// Add system message if provided
-	if *system != "" {
-		messages = append(messages, api.Message{Role: "system", Content: *system})
+	// Load bundle if specified
+	var bundlePrompt strings.Builder
+	var bundleSystem string
+	if *bundlePath != "" {
+		b, err := bundle.Load(*bundlePath)
+		if err != nil {
+			return fmt.Errorf("load bundle: %w", err)
+		}
+		if err := b.Validate(); err != nil {
+			return fmt.Errorf("bundle validation: %w", err)
+		}
+		bundleSystem = b.GetSystem()
+		bundlePromptStr, err := b.GetPrompt()
+		if err != nil {
+			return fmt.Errorf("bundle prompt: %w", err)
+		}
+		bundlePrompt.WriteString(bundlePromptStr)
+	}
+
+	// Add system message from bundle or flag (flag overrides bundle)
+	finalSystem := *system
+	if finalSystem == "" && bundleSystem != "" {
+		finalSystem = bundleSystem
+	}
+	if finalSystem != "" {
+		messages = append(messages, api.Message{Role: "system", Content: finalSystem})
 	} else if sess.System != "" {
 		messages = append(messages, api.Message{Role: "system", Content: sess.System})
 	}
 
+	// Add bundle prompt to clipboard if requested
+	if *fromClipboard {
+		clipboardText, err := clipboard.Paste()
+		if err != nil {
+			return fmt.Errorf("failed to read from clipboard: %w", err)
+		}
+		if clipboardText != "" {
+			if bundlePrompt.Len() > 0 {
+				bundlePrompt.WriteString("\n\n")
+			}
+			bundlePrompt.WriteString(clipboardText)
+		}
+	}
+
 	// Read stdin if available and requested
-	if hasStdin && *includeStdin {
+	if hasStdin && *includeStdin && !*fromClipboard {
 		stdinData, err := os.ReadFile("/dev/stdin")
 		if err == nil {
 			prompt := strings.TrimSpace(string(stdinData))
@@ -119,15 +161,14 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 	}
 
 	// Build prompt from remaining args
-	prompt := strings.Join(fs.Args(), " ")
-	if prompt == "" && !hasStdin {
+	if len(fs.Args()) == 0 && !hasStdin && !*fromClipboard {
 		// Interactive mode - would need readline
 		fmt.Println("Enter your prompt (Ctrl+C to exit):")
 		return nil // TODO: implement interactive input
 	}
 
-	if prompt != "" {
-		messages = append(messages, api.Message{Role: "user", Content: prompt})
+	if len(fs.Args()) > 0 {
+		messages = append(messages, api.Message{Role: "user", Content: strings.Join(fs.Args(), " ")})
 	}
 
 	// If no messages, error
@@ -282,6 +323,15 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		_ = store.Update(sess)
 		if !quiet {
 			fmt.Fprintf(os.Stderr, "Session saved: %s\n", sess.ID)
+		}
+	}
+
+	// Copy last response to clipboard if requested
+	if *copyLast {
+		if err := clipboard.Copy(finalContent); err != nil {
+			if !quiet {
+				ui.Error("Failed to copy to clipboard: %v", err)
+			}
 		}
 	}
 
