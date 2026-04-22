@@ -13,6 +13,8 @@ import (
 	"synesis.sh/synesis/pkg/bundle"
 	"synesis.sh/synesis/pkg/clipboard"
 	"synesis.sh/synesis/pkg/config"
+	"synesis.sh/synesis/pkg/jq"
+	outputpkg "synesis.sh/synesis/pkg/output"
 	"synesis.sh/synesis/pkg/ui"
 )
 
@@ -35,8 +37,13 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 	fromClipboard := fs.Bool("from-clipboard", false, "read prompt from clipboard")
 	copyLast := fs.Bool("copy-last", false, "copy last response to clipboard")
 	dryRun := fs.Bool("dry-run", false, "show request that would be sent without making API call")
+	printRequest := fs.Bool("print-request", false, "print full request payload (redacted)")
+	jqExpr := fs.String("jq", "", "jq-style field selection (e.g., .choices[0].message.content)")
 	showUsage := fs.Bool("usage", false, "show token usage and latency after response")
 	bundlePath := fs.String("bundle", "", "bundle file to load (YAML format)")
+	extractPath := fs.String("extract-path", "", "extract JSON field using dot notation (e.g., choices.0.message.content)")
+	writeOutput := fs.String("write-output", "", "write output to file (overwrites)")
+	appendOutput := fs.String("append-output", "", "append output to file")
 
 	// Parse, capturing error but not printing
 	if err := fs.Parse(args); err != nil {
@@ -191,6 +198,13 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 		return nil
 	}
 
+	// Print full request if requested
+	if *printRequest {
+		redactedReq := redactRequest(req)
+		outputJSON, _ := json.MarshalIndent(redactedReq, "", "  ")
+		fmt.Fprintf(os.Stderr, "Request payload:\n%s\n\n", string(outputJSON))
+	}
+
 	// Create client
 	cli := api.NewClient(cfg.Cfg.BaseURL, cfg.Cfg.APIKey)
 	defer cli.Close()
@@ -277,6 +291,40 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 		}
 	}
 
+	// Apply jq-style field selection if specified
+	if *jqExpr != "" {
+		result, err := jq.Apply(content, *jqExpr)
+		if err != nil {
+			return fmt.Errorf("jq filter: %w", err)
+		}
+		fmt.Println(result)
+		content = result
+	}
+
+	// Apply extract-path if specified (and jq not specified)
+	if *extractPath != "" && *jqExpr == "" {
+		result, err := outputpkg.ExtractPath([]byte(content), *extractPath)
+		if err != nil {
+			return fmt.Errorf("extract-path: %w", err)
+		}
+		fmt.Println(result)
+		content = string(result)
+	}
+
+	// Write to file if specified
+	if *writeOutput != "" {
+		if err := outputpkg.WriteOutput([]byte(content), *writeOutput); err != nil {
+			return err
+		}
+	}
+
+	// Append to file if specified
+	if *appendOutput != "" {
+		if err := outputpkg.AppendOutput([]byte(content), *appendOutput); err != nil {
+			return err
+		}
+	}
+
 	if *copyLast {
 		if err := clipboard.Copy(content); err != nil {
 			if !quiet {
@@ -286,6 +334,37 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 	}
 
 	return nil
+}
+
+// redactRequest creates a copy of the request with sensitive fields redacted
+func redactRequest(req *api.ChatRequest) *api.ChatRequest {
+	redacted := &api.ChatRequest{
+		Model:         req.Model,
+		Messages:      make([]api.Message, len(req.Messages)),
+		Temperature:   req.Temperature,
+		Stream:        req.Stream,
+		MaxTokens:     req.MaxTokens,
+		ToolChoice:    req.ToolChoice,
+		Tools:         make([]api.Tool, len(req.Tools)),
+	}
+
+	for i, msg := range req.Messages {
+		redacted.Messages[i] = api.Message{
+			Role:       msg.Role,
+			Content:    msg.Content,
+			ToolCalls:  msg.ToolCalls,
+			ToolCallID: msg.ToolCallID,
+		}
+		if msg.Role == "system" {
+			redacted.Messages[i].Content = "[REDACTED]"
+		}
+	}
+
+	for i, tool := range req.Tools {
+		redacted.Tools[i] = tool
+	}
+
+	return redacted
 }
 
 func printAskUsage() {
@@ -309,6 +388,11 @@ Options:
   -from-clipboard      read prompt from clipboard
   -copy-last           copy last response to clipboard
   -bundle file         bundle file to load (YAML format)
+  -jq string           jq-style field selection (e.g., .choices[0].message.content)
+  -extract-path string extract JSON field using dot notation (e.g., choices.0.message.content)
+  -print-request       print full request payload (redacted)
+  -write-output file   write output to file (overwrites)
+  -append-output file  append output to file
 
 Examples:
   synesis ask "what time is it"
@@ -318,6 +402,8 @@ Examples:
   synesis ask --tools functions.json --tool-choice required "extract data"
   cat log.txt | synesis ask "find errors"
   synesis ask --bundle mybundle.yaml
+  synesis ask --jq '.choices[0].message.content' "what is 2+2"
+  synesis ask --print-request "hello"
 
 Bundle Format (YAML):
   system: "You are a helpful assistant"

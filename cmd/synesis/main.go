@@ -96,6 +96,8 @@ func main() {
 		err = runEditor(args, *noColor, *quiet, *profile)
 	case "watch":
 		err = runWatch(args, *noColor, *quiet, *profile)
+	case "completion":
+		err = runCompletion(flag.Args()[1:], *noColor, *quiet)
 	case "help", "--help", "-h":
 		printUsage()
 		os.Exit(0)
@@ -160,6 +162,7 @@ Commands:
   presets          List available system presets
   editor           Edit content in $EDITOR
   watch            Watch files for changes
+  completion       Generate shell completion scripts
 
 Options:
   -version         Show version information
