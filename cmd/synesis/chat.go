@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -149,6 +151,9 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		}
 	}
 
+	// Track whether stdin was consumed as prompt
+	promptRead := false
+
 	// Read stdin if available and requested
 	if hasStdin && *includeStdin && !*fromClipboard {
 		stdinData, err := os.ReadFile("/dev/stdin")
@@ -156,15 +161,29 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 			prompt := strings.TrimSpace(string(stdinData))
 			if prompt != "" {
 				messages = append(messages, api.Message{Role: "user", Content: prompt})
+				promptRead = true
 			}
 		}
 	}
 
-	// Build prompt from remaining args
-	if len(fs.Args()) == 0 && !hasStdin && !*fromClipboard {
-		// Interactive mode - would need readline
+	// Read prompt interactively if no args provided and no prompt read yet
+	if len(fs.Args()) == 0 && !promptRead && !*fromClipboard {
 		fmt.Println("Enter your prompt (Ctrl+C to exit):")
-		return nil // TODO: implement interactive input
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return fmt.Errorf("read error: %w", err)
+			}
+			line = strings.TrimRight(line, "\r\n")
+			if line != "" {
+				messages = append(messages, api.Message{Role: "user", Content: line})
+				break
+			}
+		}
 	}
 
 	if len(fs.Args()) > 0 {
