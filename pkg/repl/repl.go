@@ -84,6 +84,10 @@ func (r *REPL) Run() error {
 		if !strings.HasSuffix(line, "\\") {
 			// Process complete input
 			if err := r.process(r.currentText); err != nil {
+				if err == io.EOF {
+					// /exit or /quit command
+					return nil
+				}
 				ui.Error("%v", err)
 			}
 			r.currentText = ""
