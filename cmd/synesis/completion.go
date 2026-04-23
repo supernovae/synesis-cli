@@ -39,7 +39,7 @@ _synesis_completion() {
     local cur prev words cword
     _get_comp_words_by_ref -n : cur prev words cword
 
-    local commands="chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help"
+    local commands="chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help"
 
     case $cword in
         1)
@@ -68,6 +68,18 @@ _synesis_completion() {
                 watch)
                     COMPREPLY=($(compgen -W "--interval --help" -- "$cur"))
                     ;;
+                review)
+                    COMPREPLY=($(compgen -W "--model --temperature --timeout --output --conventional --since --branch --diff --render --dry-run --usage --no-stream" -- "$cur"))
+                    ;;
+                pr-summary)
+                    COMPREPLY=($(compgen -W "--model --temperature --timeout --output --base --head --render --format --dry-run --usage --no-stream" -- "$cur"))
+                    ;;
+                release-notes)
+                    COMPREPLY=($(compgen -W "--model --temperature --timeout --output --from --to --tag --include-commits --render --dry-run --usage --no-stream" -- "$cur"))
+                    ;;
+                explain-commit)
+                    COMPREPLY=($(compgen -W "--model --temperature --timeout --output --ref --stat --no-diff --render --dry-run --usage --no-stream" -- "$cur"))
+                    ;;
             esac
             ;;
     esac
@@ -95,6 +107,10 @@ _synesis_completion() {
         'extract:Extract structured fields from input'
         'summarize:Summarize stdin, files, or prompt'
         'commit-message:Generate commit message from diff'
+        'review:Review code changes'
+        'pr-summary:Summarize commits between two refs'
+        'release-notes:Generate release notes from git history'
+        'explain-commit:Explain a commit or series of commits'
         'doctor:Run diagnostics'
         'profile:Manage configuration profiles'
         'template:Manage prompt templates'
@@ -161,23 +177,27 @@ func generateFishCompletion() error {
 	script := `complete -c synesis -f
 
 # Commands
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "chat" -d "Start an interactive chat session"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "ask" -d "One-shot prompt/answer mode"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "session" -d "Manage chat sessions"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "models" -d "List available models"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "config" -d "Show configuration"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "auth" -d "Configure authentication"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "extract" -d "Extract structured fields from input"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "summarize" -d "Summarize stdin, files, or prompt"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "commit-message" -d "Generate commit message from diff"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "doctor" -d "Run diagnostics"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "profile" -d "Manage configuration profiles"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "template" -d "Manage prompt templates"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "repl" -d "Interactive REPL mode"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "presets" -d "List available system presets"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "editor" -d "Edit content in $EDITOR"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "watch" -d "Watch files for changes"
-complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "help" -d "Show help"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "chat" -d "Start an interactive chat session"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "ask" -d "One-shot prompt/answer mode"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "session" -d "Manage chat sessions"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "models" -d "List available models"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "config" -d "Show configuration"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "auth" -d "Configure authentication"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "extract" -d "Extract structured fields from input"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "summarize" -d "Summarize stdin, files, or prompt"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "review" -d "Review code changes"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "pr-summary" -d "Summarize commits between two refs"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "release-notes" -d "Generate release notes from git history"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "explain-commit" -d "Explain a commit or series of commits"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "commit-message" -d "Generate commit message from diff"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "doctor" -d "Run diagnostics"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "profile" -d "Manage configuration profiles"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "template" -d "Manage prompt templates"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "repl" -d "Interactive REPL mode"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "presets" -d "List available system presets"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "editor" -d "Edit content in $EDITOR"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "watch" -d "Watch files for changes"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message review pr-summary release-notes explain-commit doctor profile template repl presets editor watch help" -a "help" -d "Show help"
 
 # Flags for chat/ask/summarize
 complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l model -d "model"
@@ -221,6 +241,60 @@ complete -c synesis -n "__fish_seen_subcommand_from doctor" -l fix -d "fix issue
 # Watch flags
 complete -c synesis -n "__fish_seen_subcommand_from watch" -l interval -d "interval"
 complete -c synesis -n "__fish_seen_subcommand_from watch" -l help -d "help"
+
+# Review flags
+complete -c synesis -n "__fish_seen_subcommand_from review" -l model -d "model to use"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l temperature -d "temperature"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l timeout -d "timeout in seconds"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l output -d "output format" -a "text json ndjson"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l conventional -d "use conventional commit format hints"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l since -d "review commits since this ref"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l branch -d "review branch diff vs base"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l diff -d "read diff from file path"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l render -d "render mode" -a "plain markdown raw"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l dry-run -d "show request without API call"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l usage -d "show token usage and latency"
+complete -c synesis -n "__fish_seen_subcommand_from review" -l no-stream -d "disable streaming"
+
+# PR summary flags
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l model -d "model to use"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l temperature -d "temperature"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l timeout -d "timeout in seconds"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l output -d "output format" -a "text json ndjson md"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l base -d "base commit/ref"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l head -d "head commit/ref"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l render -d "render mode" -a "plain markdown raw"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l format -d "summary depth" -a "brief detailed"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l dry-run -d "show request without API call"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l usage -d "show token usage and latency"
+complete -c synesis -n "__fish_seen_subcommand_from pr-summary" -l no-stream -d "disable streaming"
+
+# Release notes flags
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l model -d "model to use"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l temperature -d "temperature"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l timeout -d "timeout in seconds"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l output -d "output format" -a "text json md"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l from -d "from tag"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l to -d "to tag"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l tag -d "generate notes for this tag"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l include-commits -d "include commit SHAs in output"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l render -d "render mode" -a "plain markdown raw"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l dry-run -d "show request without API call"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l usage -d "show token usage and latency"
+complete -c synesis -n "__fish_seen_subcommand_from release-notes" -l no-stream -d "disable streaming"
+
+# Explain commit flags
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l model -d "model to use"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l temperature -d "temperature"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l timeout -d "timeout in seconds"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l output -d "output format" -a "text json md"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l ref -d "commit ref to explain"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l stat -d "include git show --stat output"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l no-diff -d "exclude full diff from context"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l render -d "render mode" -a "plain markdown raw"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l dry-run -d "show request without API call"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l usage -d "show token usage and latency"
+complete -c synesis -n "__fish_seen_subcommand_from explain-commit" -l no-stream -d "disable streaming"
 `
 	fmt.Print(script)
 	return nil

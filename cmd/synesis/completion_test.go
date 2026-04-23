@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -47,5 +50,35 @@ func TestGenerateZshCompletion(t *testing.T) {
 	err := generateZshCompletion()
 	if err != nil {
 		t.Fatalf("generateZshCompletion failed: %v", err)
+	}
+}
+
+func TestGenerateFishCompletion(t *testing.T) {
+	err := generateFishCompletion()
+	if err != nil {
+		t.Fatalf("generateFishCompletion failed: %v", err)
+	}
+}
+
+func TestGenerateFishCompletion_ContainsNewCommands(t *testing.T) {
+	// Capture stdout
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	err := generateFishCompletion()
+	w.Close()
+	os.Stdout = old
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+
+	if err != nil {
+		t.Fatalf("generateFishCompletion failed: %v", err)
+	}
+	out := buf.String()
+
+	for _, cmd := range []string{"review", "pr-summary", "release-notes", "explain-commit"} {
+		if !strings.Contains(out, `-a "`+cmd+`"`) {
+			t.Errorf("Fish completion missing command %q", cmd)
+		}
 	}
 }

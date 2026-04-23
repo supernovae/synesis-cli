@@ -82,6 +82,14 @@ func main() {
 		err = runSummarize(args, *noColor, *quiet, *profile)
 	case "commit-message":
 		err = runCommitMessage(args, *noColor, *quiet, *profile)
+	case "review":
+		err = runReview(args, *noColor, *quiet, *profile)
+	case "pr-summary":
+		err = runPRSummary(args, *noColor, *quiet, *profile)
+	case "release-notes":
+		err = runReleaseNotes(args, *noColor, *quiet, *profile)
+	case "explain-commit":
+		err = runExplainCommit(args, *noColor, *quiet, *profile)
 	case "doctor":
 		err = runDoctor(args, *noColor, *quiet, *profile)
 	case "profile":
@@ -155,6 +163,10 @@ Commands:
   extract          Extract structured fields from input
   summarize        Summarize stdin, files, or prompt
   commit-message   Generate commit message from diff
+  review           Review code changes
+  pr-summary       Summarize commits between two refs
+  release-notes    Generate release notes from git history
+  explain-commit   Explain a commit or series of commits
   doctor           Run diagnostics
   profile          Manage configuration profiles
   template         Manage prompt templates

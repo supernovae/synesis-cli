@@ -18,6 +18,11 @@ func runTemplate(args []string, noColor, quiet bool, profileName string) error {
 		return nil
 	}
 
+	if args[0] == "--help" || args[0] == "-h" {
+		printTemplateUsage()
+		return nil
+	}
+
 	subcmd := strings.ToLower(args[0])
 	subArgs := args[1:]
 
