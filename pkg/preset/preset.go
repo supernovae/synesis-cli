@@ -25,7 +25,7 @@ func NewStore(dir string) (*Store, error) {
 	if dir == "" {
 		dir = defaultPresetDir()
 	}
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	return &Store{dir: dir}, nil
@@ -112,5 +112,5 @@ func saveYAML(file string, data interface{}) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(file, b, 0644)
+	return os.WriteFile(file, b, 0o600)
 }

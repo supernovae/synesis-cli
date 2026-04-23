@@ -52,9 +52,16 @@ func Parse(data []byte, dir string) (*Bundle, error) {
 
 	// Resolve file paths relative to bundle directory
 	for i := range b.Files {
-		if !filepath.IsAbs(b.Files[i].Path) {
-			b.Files[i].Path = filepath.Join(dir, b.Files[i].Path)
+		resolved := b.Files[i].Path
+		if !filepath.IsAbs(resolved) {
+			resolved = filepath.Join(dir, resolved)
 		}
+		resolved = filepath.Clean(resolved)
+		// Prevent path traversal outside the bundle directory
+		if !strings.HasPrefix(resolved, filepath.Clean(dir)+string(filepath.Separator)) {
+			return nil, fmt.Errorf("bundle file path escapes bundle directory: %s", b.Files[i].Path)
+		}
+		b.Files[i].Path = resolved
 	}
 
 	return &b, nil
@@ -84,19 +91,17 @@ func (b *Bundle) GetPrompt() (string, error) {
 		prompt.WriteString(b.Prompt)
 	}
 
-	// Add file contents
+	// Add file contents (all roles are included; role is a consumer hint)
 	for _, f := range b.Files {
-		if f.Role == "context" || f.Role == "" {
-			content, err := os.ReadFile(f.Path)
-			if err != nil {
-				return "", fmt.Errorf("read file %s: %w", f.Path, err)
-			}
-			if prompt.Len() > 0 {
-				prompt.WriteString("\n\n")
-			}
-			prompt.WriteString(fmt.Sprintf("--- File: %s ---\n", f.Path))
-			prompt.Write(content)
+		content, err := os.ReadFile(f.Path)
+		if err != nil {
+			return "", fmt.Errorf("read file %s: %w", f.Path, err)
 		}
+		if prompt.Len() > 0 {
+			prompt.WriteString("\n\n")
+		}
+		prompt.WriteString(fmt.Sprintf("--- File: %s ---\n", f.Path))
+		prompt.Write(content)
 	}
 
 	return prompt.String(), nil

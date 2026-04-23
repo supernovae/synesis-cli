@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -84,7 +85,6 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 	// Load bundle if specified
 	var bundlePrompt strings.Builder
 	var bundleSystem string
-	// bundleFiles reserved for future use (file references from bundle)
 	if *bundlePath != "" {
 		b, err := bundle.Load(*bundlePath)
 		if err != nil {
@@ -142,7 +142,7 @@ func runAsk(args []string, noColor, quiet bool, profileName string) error {
 
 	// Add stdin if present
 	if hasStdin && *includeStdin {
-		stdinData, err := os.ReadFile("/dev/stdin")
+		stdinData, err := io.ReadAll(os.Stdin)
 		if err == nil {
 			stdinContent := strings.TrimSpace(string(stdinData))
 			if stdinContent != "" {

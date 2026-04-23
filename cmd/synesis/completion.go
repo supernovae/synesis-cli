@@ -8,13 +8,14 @@ import (
 
 func runCompletion(args []string, noColor, quiet bool) error {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: synesis completion <bash|zsh>")
+		fmt.Fprintln(os.Stderr, "Usage: synesis completion <bash|zsh|fish>")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Generate shell completion scripts for synesis.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Examples:")
 		fmt.Fprintln(os.Stderr, "  synesis completion bash > /usr/local/etc/bash_completion.d/synesis")
 		fmt.Fprintln(os.Stderr, "  synesis completion zsh > /usr/local/share/zsh/site-functions/_synesis")
+		fmt.Fprintln(os.Stderr, "  synesis completion fish > ~/.config/fish/completions/synesis.fish")
 		return nil
 	}
 
@@ -24,8 +25,10 @@ func runCompletion(args []string, noColor, quiet bool) error {
 		return generateBashCompletion()
 	case "zsh":
 		return generateZshCompletion()
+	case "fish":
+		return generateFishCompletion()
 	default:
-		return fmt.Errorf("unsupported shell: %s (use bash or zsh)", shell)
+		return fmt.Errorf("unsupported shell: %s (use bash, zsh, or fish)", shell)
 	}
 }
 
@@ -148,6 +151,76 @@ _synesis_completion() {
 }
 
 _synesis_completion "$@"
+`
+	fmt.Print(script)
+	return nil
+}
+
+func generateFishCompletion() error {
+	// Generate fish completion script
+	script := `complete -c synesis -f
+
+# Commands
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "chat" -d "Start an interactive chat session"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "ask" -d "One-shot prompt/answer mode"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "session" -d "Manage chat sessions"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "models" -d "List available models"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "config" -d "Show configuration"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "auth" -d "Configure authentication"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "extract" -d "Extract structured fields from input"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "summarize" -d "Summarize stdin, files, or prompt"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "commit-message" -d "Generate commit message from diff"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "doctor" -d "Run diagnostics"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "profile" -d "Manage configuration profiles"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "template" -d "Manage prompt templates"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "repl" -d "Interactive REPL mode"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "presets" -d "List available system presets"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "editor" -d "Edit content in $EDITOR"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "watch" -d "Watch files for changes"
+complete -c synesis -n "not __fish_seen_subcommand_from chat ask session models config auth extract summarize commit-message doctor profile template repl presets editor watch help" -a "help" -d "Show help"
+
+# Flags for chat/ask/summarize
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l model -d "model"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l temperature -d "temperature"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l max-tokens -d "max tokens"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l system -d "system prompt"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l timeout -d "timeout"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l output -d "output format" -a "text json ndjson"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l render -d "render mode" -a "plain markdown raw"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l dry-run -d "dry run"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l usage -d "show usage"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l bundle -d "bundle file"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l from-clipboard -d "from clipboard"
+complete -c synesis -n "__fish_seen_subcommand_from chat ask summarize" -l copy-last -d "copy last response"
+
+# Session subcommands
+complete -c synesis -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list show delete rename export import" -a "list" -d "List sessions"
+complete -c synesis -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list show delete rename export import" -a "show" -d "Show session"
+complete -c synesis -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list show delete rename export import" -a "delete" -d "Delete session"
+complete -c synesis -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list show delete rename export import" -a "rename" -d "Rename session"
+complete -c synesis -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list show delete rename export import" -a "export" -d "Export session"
+complete -c synesis -n "__fish_seen_subcommand_from session; and not __fish_seen_subcommand_from list show delete rename export import" -a "import" -d "Import session"
+
+# Template subcommands
+complete -c synesis -n "__fish_seen_subcommand_from template; and not __fish_seen_subcommand_from list show create delete run" -a "list" -d "List templates"
+complete -c synesis -n "__fish_seen_subcommand_from template; and not __fish_seen_subcommand_from list show create delete run" -a "show" -d "Show template"
+complete -c synesis -n "__fish_seen_subcommand_from template; and not __fish_seen_subcommand_from list show create delete run" -a "create" -d "Create template"
+complete -c synesis -n "__fish_seen_subcommand_from template; and not __fish_seen_subcommand_from list show create delete run" -a "delete" -d "Delete template"
+complete -c synesis -n "__fish_seen_subcommand_from template; and not __fish_seen_subcommand_from list show create delete run" -a "run" -d "Run template"
+
+# Profile subcommands
+complete -c synesis -n "__fish_seen_subcommand_from profile; and not __fish_seen_subcommand_from list show create delete" -a "list" -d "List profiles"
+complete -c synesis -n "__fish_seen_subcommand_from profile; and not __fish_seen_subcommand_from list show create delete" -a "show" -d "Show profile"
+complete -c synesis -n "__fish_seen_subcommand_from profile; and not __fish_seen_subcommand_from list show create delete" -a "create" -d "Create profile"
+complete -c synesis -n "__fish_seen_subcommand_from profile; and not __fish_seen_subcommand_from list show create delete" -a "delete" -d "Delete profile"
+
+# Doctor flags
+complete -c synesis -n "__fish_seen_subcommand_from doctor" -l v -d "verbose"
+complete -c synesis -n "__fish_seen_subcommand_from doctor" -l fix -d "fix issues"
+
+# Watch flags
+complete -c synesis -n "__fish_seen_subcommand_from watch" -l interval -d "interval"
+complete -c synesis -n "__fish_seen_subcommand_from watch" -l help -d "help"
 `
 	fmt.Print(script)
 	return nil

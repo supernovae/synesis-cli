@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 	"synesis.sh/synesis/pkg/config"
@@ -105,6 +106,16 @@ func runAuth(args []string, noColor, quiet bool, profileName string) error {
 		tokenFromKeychain := hasKC && kcErr == nil
 
 		if *printToken {
+			// Require terminal confirmation before displaying raw token
+			if ui.IsTerminal() {
+				fmt.Fprintf(os.Stderr, "Warning: --show-token will display the raw API key to stdout. Continue? [y/N] ")
+				var response string
+				fmt.Scanln(&response)
+				if strings.ToLower(response) != "y" {
+					fmt.Fprintln(os.Stderr, "Cancelled.")
+					return nil
+				}
+			}
 			if tokenFromKeychain {
 				if key, err := keychain.GetAPIKey(); err == nil {
 					fmt.Printf("  %s  %s\n",

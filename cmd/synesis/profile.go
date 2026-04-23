@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"synesis.sh/synesis/pkg/config"
+	"synesis.sh/synesis/pkg/keychain"
 	"synesis.sh/synesis/pkg/ui"
 )
 
@@ -169,11 +170,17 @@ func runProfileCreate(args []string, noColor, quiet bool) error {
 	profile := config.Profile{
 		Name:     profileName,
 		BaseURL:  *baseURL,
-		APIKey:   *apiKey,
 		Model:    *model,
 		Timeout:  *timeout,
 		OrgID:    *orgID,
 		Endpoint: *endpoint,
+	}
+
+	// Store API key in keychain instead of plaintext config
+	if *apiKey != "" {
+		if err := keychain.SetProfileAPIKey(profileName, *apiKey); err != nil {
+			return fmt.Errorf("store API key in keychain: %w", err)
+		}
 	}
 
 	cfg.Cfg.Profiles[profileName] = profile
@@ -232,6 +239,9 @@ func runProfileDelete(args []string, noColor, quiet bool) error {
 
 	// Delete profile
 	delete(cfg.Cfg.Profiles, profileName)
+
+	// Delete keychain entry for this profile (best-effort)
+	_ = keychain.DeleteProfileAPIKey(profileName)
 
 	// Clear default if this was the default
 	if cfg.Cfg.DefaultProfile == profileName {

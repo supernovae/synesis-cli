@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -52,11 +53,12 @@ func runCommitMessage(args []string, noColor, quiet bool, profileName string) er
 		data, _ := os.ReadFile("/dev/stdin")
 		content = strings.TrimSpace(string(data))
 	} else {
-		// Try git diff
-		data, _ := os.ReadFile("/dev/stdin") // This will be empty, try running git diff
-		// Actually we need to check if there's a git repo and get diff
-		_ = data
-		// For now, require stdin if no args
+		// Try git diff automatically
+		if data, err := exec.Command("git", "diff", "--cached").Output(); err == nil && len(data) > 0 {
+			content = strings.TrimSpace(string(data))
+		} else if data, err := exec.Command("git", "diff").Output(); err == nil && len(data) > 0 {
+			content = strings.TrimSpace(string(data))
+		}
 	}
 
 	if content == "" && len(fs.Args()) > 0 {

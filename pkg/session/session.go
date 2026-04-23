@@ -81,19 +81,20 @@ func (s *Store) Get(id string) (*Session, error) {
 	return &sess, nil
 }
 
-// FindByName finds a session by name (case-insensitive prefix match)
+// FindByName finds a session by name (case-insensitive exact match)
 func (s *Store) FindByName(name string) (*Session, error) {
 	sessions, err := s.List()
 	if err != nil {
 		return nil, err
 	}
 
-	name = strings.ToLower(name)
+	// First pass: exact case-insensitive match
 	for _, sess := range sessions {
-		if strings.EqualFold(sess.Name, name) || strings.HasPrefix(strings.ToLower(sess.Name), name) {
+		if strings.EqualFold(sess.Name, name) {
 			return &sess, nil
 		}
 	}
+
 	return nil, fmt.Errorf("session not found: %s", name)
 }
 

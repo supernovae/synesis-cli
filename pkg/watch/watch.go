@@ -2,9 +2,7 @@ package watch
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -14,7 +12,6 @@ type Watcher struct {
 	watcher  *fsnotify.Watcher
 	paths    []string
 	callback func(event fsnotify.Event)
-	interval time.Duration
 	stopped  bool
 }
 
@@ -51,11 +48,6 @@ func absPath(path string) (string, error) {
 // SetCallback sets the callback function to run on file changes
 func (w *Watcher) SetCallback(callback func(event fsnotify.Event)) {
 	w.callback = callback
-}
-
-// SetInterval sets the polling interval for file changes
-func (w *Watcher) SetInterval(interval time.Duration) {
-	w.interval = interval
 }
 
 // AddPath adds a path to watch
@@ -97,61 +89,6 @@ func (w *Watcher) eventLoop() {
 			w.callback(event)
 		}
 	}
-}
-
-// StartWithInterval starts watching with a polling interval
-func (w *Watcher) StartWithInterval() error {
-	if len(w.paths) == 0 {
-		return fmt.Errorf("no paths to watch")
-	}
-
-	if w.interval == 0 {
-		w.interval = 2 * time.Second
-	}
-
-	// Add all paths
-	for _, p := range w.paths {
-		if err := w.watcher.Add(p); err != nil {
-			return err
-		}
-	}
-
-	// Start polling loop
-	go w.pollingLoop()
-
-	return nil
-}
-
-// pollingLoop polls for file changes at the configured interval
-func (w *Watcher) pollingLoop() {
-	ticker := time.NewTicker(w.interval)
-	defer ticker.Stop()
-
-	for !w.stopped {
-		select {
-		case <-ticker.C:
-			// Check if any watched files have changed
-			for _, p := range w.paths {
-				if err := w.checkFile(p); err != nil {
-					continue
-				}
-			}
-		}
-	}
-}
-
-// checkFile checks if a file has changed and triggers callback
-func (w *Watcher) checkFile(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	// Simple change detection - compare modification time
-	// In a real implementation, you'd track previous modification times
-	_ = info.ModTime()
-
-	return nil
 }
 
 // Stop stops watching for file changes

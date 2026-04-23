@@ -84,7 +84,8 @@ func pasteLinux() (string, error) {
 
 func copyWindows(text string) error {
 	cmd := exec.Command("powershell", "-Command",
-		fmt.Sprintf("[Clipboard]::SetText(%q)", text))
+		"[System.Windows.Forms.Clipboard]::SetText($Input)")
+	cmd.Stdin = bytes.NewBufferString(text)
 	return cmd.Run()
 }
 

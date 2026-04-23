@@ -238,12 +238,17 @@ func (r *REPL) handleSave(args []string) error {
 	}
 
 	if name != "" {
-		if err := r.store.Rename(r.session.ID, name); err != nil {
-			return fmt.Errorf("rename session: %w", err)
-		}
+		r.session.Name = name
+	}
+
+	if err := r.store.Update(r.session); err != nil {
+		return fmt.Errorf("save session: %w", err)
+	}
+
+	if name != "" {
 		fmt.Fprintf(r.writer, "Session saved as: %s\n", name)
 	} else {
-		fmt.Fprintf(r.writer, "Session ID: %s\n", r.session.ID)
+		fmt.Fprintf(r.writer, "Session saved (ID: %s)\n", r.session.ID)
 	}
 
 	return nil

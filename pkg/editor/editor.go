@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 // Editor manages text editing operations
@@ -29,10 +31,33 @@ func (e *Editor) SetArgs(args []string) {
 	e.Args = args
 }
 
-// EditFile opens a file in the editor
-func (e *Editor) EditFile(path string) error {
+// validateExecutable checks that the editor executable is a simple name (not a
+// shell command with arguments or path separators) and is resolvable in PATH.
+func (e *Editor) validateExecutable() error {
 	if e.Executable == "" {
 		return fmt.Errorf("EDITOR environment variable not set")
+	}
+	if strings.ContainsAny(e.Executable, ";|&$`<>") {
+		return fmt.Errorf("EDITOR contains shell metacharacters: %s", e.Executable)
+	}
+	// Only allow absolute paths or simple names resolvable in PATH.
+	if filepath.IsAbs(e.Executable) {
+		if _, err := os.Stat(e.Executable); err != nil {
+			return fmt.Errorf("editor not found: %s", e.Executable)
+		}
+		return nil
+	}
+	_, err := exec.LookPath(e.Executable)
+	if err != nil {
+		return fmt.Errorf("editor not found in PATH: %s", e.Executable)
+	}
+	return nil
+}
+
+// EditFile opens a file in the editor
+func (e *Editor) EditFile(path string) error {
+	if err := e.validateExecutable(); err != nil {
+		return err
 	}
 
 	cmdArgs := append([]string{path}, e.Args...)
@@ -46,8 +71,8 @@ func (e *Editor) EditFile(path string) error {
 
 // EditString opens content in a temporary file in the editor
 func (e *Editor) EditString(content string) (string, error) {
-	if e.Executable == "" {
-		return "", fmt.Errorf("EDITOR environment variable not set")
+	if err := e.validateExecutable(); err != nil {
+		return "", err
 	}
 
 	// Create temporary file

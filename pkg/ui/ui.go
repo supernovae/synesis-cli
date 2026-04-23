@@ -302,10 +302,14 @@ type DryRunOutput struct {
 // PrintDryRun displays the request that would be sent without making the API call
 // If outputJSON is true, outputs to stdout as JSON; otherwise outputs human-readable to stderr
 func PrintDryRun(cfg *config.LoadedConfig, req *api.ChatRequest, outputJSON bool) {
-	// Prepare output with redacted API key
+	// Prepare output with redacted secrets
 	apiKey := cfg.Cfg.APIKey
 	if apiKey != "" {
 		apiKey = config.RedactedSecret
+	}
+	orgID := cfg.Cfg.OrgID
+	if orgID != "" {
+		orgID = config.RedactedSecret
 	}
 
 	dryRun := DryRunOutput{
@@ -314,7 +318,7 @@ func PrintDryRun(cfg *config.LoadedConfig, req *api.ChatRequest, outputJSON bool
 		Endpoint:    cfg.Cfg.Endpoint,
 		Timeout:     cfg.Cfg.Timeout,
 		APIKey:      apiKey,
-		OrgID:       cfg.Cfg.OrgID,
+		OrgID:       orgID,
 		Messages:    req.Messages,
 		Temperature: req.Temperature,
 		MaxTokens:   req.MaxTokens,

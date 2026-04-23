@@ -25,9 +25,10 @@ type Parser struct {
 	OnContent func(content string)
 	// OnContentError is called on content parse errors (non-blocking)
 	OnContentError func(err error)
+	// done is set when the [DONE] signal is received
+	done bool
 	// Buffer for incomplete lines
-	buf     []byte
-	lastRune rune
+	buf []byte
 }
 
 // NewParser creates a streaming parser
@@ -69,6 +70,9 @@ func (p *Parser) Parse(ctx context.Context, r io.Reader) error {
 
 		p.processLine(lineBuf.Bytes())
 		lineBuf.Reset()
+		if p.done {
+			return nil
+		}
 	}
 }
 
@@ -95,6 +99,7 @@ func (p *Parser) processLine(line []byte) {
 			// Try to detect errors in content but don't fail
 			if onError != nil {
 				if strings.Contains(value, "[DONE]") {
+					p.done = true
 					return
 				}
 				var check struct {

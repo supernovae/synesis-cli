@@ -94,9 +94,9 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		sess, err = store.Get(*sessionID)
 		if err != nil {
 			sess, err = store.FindByName(*sessionID)
-		}
-		if err != nil {
-			return fmt.Errorf("session not found: %s", *sessionID)
+			if err != nil {
+				return fmt.Errorf("session not found: %s", *sessionID)
+			}
 		}
 		messages = sessionToAPIMessages(sess.Messages)
 	} else {
@@ -307,9 +307,9 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 		// Handle output format for non-streaming
 		switch outputMode {
 		case ui.OutputJSON:
-			fmt.Fprintf(os.Stdout, `{"content": %s}`+"\n", jsonMarshal(finalContent))
+			fmt.Fprintf(os.Stdout, `{"content": "%s"}`+"\n", escapeJSON(finalContent))
 		case ui.OutputNDJSON:
-			fmt.Fprintf(os.Stdout, `%s`+"\n", jsonMarshal(finalContent))
+			fmt.Fprintf(os.Stdout, "\"%s\"\n", escapeJSON(finalContent))
 		default:
 			// Apply render mode
 			rendered := ui.RenderResponse(finalContent, renderMode, noColor, isTTY)
@@ -355,14 +355,4 @@ func runChat(args []string, noColor, quiet bool, profileName string) error {
 	}
 
 	return nil
-}
-
-func jsonMarshal(s string) string {
-	// Simple JSON string escaping
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	s = strings.ReplaceAll(s, "\n", `\n`)
-	s = strings.ReplaceAll(s, "\r", `\r`)
-	s = strings.ReplaceAll(s, "\t", `\t`)
-	return `"` + s + `"`
 }

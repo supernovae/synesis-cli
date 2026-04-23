@@ -16,8 +16,6 @@ import (
 // runREPL implements the repl command
 func runREPL(args []string, noColor, quiet bool, profileName string) error {
 	fs := flag.NewFlagSet("repl", flag.ExitOnError)
-	model := fs.String("model", "", "default model")
-	sessionID := fs.String("session", "", "start with existing session")
 	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 	fs.Parse(args)
 
@@ -70,25 +68,6 @@ func runREPL(args []string, noColor, quiet bool, profileName string) error {
 		fmt.Fprintln(os.Stdout, "\nInterrupted. Type /exit to quit.")
 	}()
 
-	// Load initial session if specified
-	if *sessionID != "" {
-		sess, err := store.Get(*sessionID)
-		if err != nil {
-			sess, err = store.FindByName(*sessionID)
-		}
-		if err != nil {
-			return fmt.Errorf("session not found: %s", *sessionID)
-		}
-		// Set session in REPL (would need exported method)
-		_ = sess
-	}
-
-	// Set default model if specified
-	if *model != "" {
-		// Would need exported method to set model
-		_ = *model
-	}
-
 	// Run REPL
 	err = r.Run()
 	if err != nil && err.Error() != "EOF" {
@@ -96,32 +75,4 @@ func runREPL(args []string, noColor, quiet bool, profileName string) error {
 	}
 
 	return nil
-}
-
-func printREPLUsage() {
-	fmt.Print(`synesis repl - Interactive REPL mode
-
-Usage: synesis repl [options]
-
-Options:
-  -model string      Default model to use
-  -session string    Start with existing session
-  -no-stream         Disable streaming responses
-
-Commands (typed in REPL):
-  /help              Show help message
-  /exit, /quit       Exit the REPL
-  /save [name]       Save current session
-  /model [name]      Show or set model
-  /system [prompt]   Show or set system prompt
-  /clear             Clear screen
-  /session [id]      Show or load session
-  /new               Start new conversation
-
-Examples:
-  synesis repl
-  synesis repl -model gpt-4
-  synesis repl -session my-session
-
-`)
 }

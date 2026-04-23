@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -98,7 +99,7 @@ type ChatResponse struct {
 type Model struct {
 	ID          string `json:"id"`
 	Object      string `json:"object"`
-	CreateLater int64  `json:"created,omitempty"`
+	Created int64  `json:"created,omitempty"`
 	 Owned     string `json:"owned_by,omitempty"`
 }
 
@@ -204,13 +205,18 @@ func (c *httpClient) isRetryable(err error) bool {
 	}
 	var he *HTTPError
 	if errors.As(err, &he) {
-		// Retry on rate limit or transient errors
+		// Retry on rate limit or transient HTTP errors
 		switch he.StatusCode {
 		case 429, 500, 502, 503, 504:
 			return true
 		}
+		return false
 	}
-	// Retry on temporary network errors is handled by http.Client
+	// Retry on transient network errors (timeouts, connection refused, etc.)
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Temporary() || netErr.Timeout()
+	}
 	return false
 }
 

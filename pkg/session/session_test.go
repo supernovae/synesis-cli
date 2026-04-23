@@ -218,8 +218,8 @@ func TestStore_FindByName(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Find by name
-	found, err := store.FindByName("my-important")
+	// Find by exact name
+	found, err := store.FindByName("my-important-session")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestStore_FindByName(t *testing.T) {
 	}
 
 	// Case insensitive
-	found, err = store.FindByName("MY-IMPORTANT")
+	found, err = store.FindByName("MY-IMPORTANT-SESSION")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

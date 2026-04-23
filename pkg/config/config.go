@@ -47,6 +47,9 @@ func (c *Config) EffectiveConfig() *Config {
 
 const RedactedSecret = "[REDACTED]"
 
+// DefaultModel is the fallback model used when no model is configured.
+const DefaultModel = "gpt-4o-mini"
+
 // LoadedConfig holds resolved configuration and source info
 type LoadedConfig struct {
 	Sources     []string // which sources were used

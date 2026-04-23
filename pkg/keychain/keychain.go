@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 // Keychain provides secure storage for secrets
@@ -134,9 +135,8 @@ func (k *Keychain) getWindows() (string, error) {
 }
 
 func (k *Keychain) setWindows(secret string) error {
-	// Use PowerShell to store credentials
-	psCmd := fmt.Sprintf(`cmdkey /add:"%s" /user:"%s" /pass:"%s"`, k.serviceName, k.accountName, secret)
-	cmd := exec.Command("powershell", "-Command", psCmd)
+	// Use cmdkey directly with argument arrays to avoid shell injection
+	cmd := exec.Command("cmdkey", "/add:"+k.serviceName, "/user:"+k.accountName, "/pass:"+secret)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%w: %v", ErrCommandFailed, err)
 	}
@@ -171,12 +171,13 @@ func (k *Keychain) getLinux() (string, error) {
 }
 
 func (k *Keychain) setLinux(secret string) error {
-	// Try secret-tool first (libsecret)
+	// Try secret-tool first (libsecret) — password is read from stdin
 	cmd := exec.Command("secret-tool", "store", "--label", k.serviceName, "service", k.serviceName, "user", k.accountName)
-	cmd.Stdin = nil // secret-tool reads from stdin
-	// We need to pipe the password to stdin
-	// For simplicity, we'll use a different approach
-	return fmt.Errorf("keychain set not fully implemented for Linux - use secret-tool or keyring manually")
+	cmd.Stdin = strings.NewReader(secret)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: %v", ErrCommandFailed, err)
+	}
+	return nil
 }
 
 func (k *Keychain) deleteLinux() error {
@@ -209,4 +210,32 @@ func DeleteAPIKey() error {
 func HasAPIKey() (bool, error) {
 	keychain := New("synesis", "api-key")
 	return keychain.Exists()
+}
+
+// ProfileKeychain returns a keychain scoped to a named profile.
+func ProfileKeychain(profileName string) *Keychain {
+	if profileName == "" {
+		return New("synesis", "api-key")
+	}
+	return New("synesis-profile", profileName)
+}
+
+// GetProfileAPIKey retrieves a key for a named profile from the keychain.
+func GetProfileAPIKey(profileName string) (string, error) {
+	return ProfileKeychain(profileName).Get()
+}
+
+// SetProfileAPIKey stores a key for a named profile in the keychain.
+func SetProfileAPIKey(profileName, key string) error {
+	return ProfileKeychain(profileName).Set(key)
+}
+
+// DeleteProfileAPIKey removes a key for a named profile from the keychain.
+func DeleteProfileAPIKey(profileName string) error {
+	return ProfileKeychain(profileName).Delete()
+}
+
+// HasProfileAPIKey checks if a key exists for a named profile in the keychain.
+func HasProfileAPIKey(profileName string) (bool, error) {
+	return ProfileKeychain(profileName).Exists()
 }

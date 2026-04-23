@@ -20,7 +20,7 @@ func TestRunCompletion_Zsh(t *testing.T) {
 }
 
 func TestRunCompletion_InvalidShell(t *testing.T) {
-	err := runCompletion([]string{"fish"}, false, true)
+	err := runCompletion([]string{"powershell"}, false, true)
 	if err == nil {
 		t.Fatal("expected error for invalid shell")
 	}

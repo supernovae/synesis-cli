@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xeipuuv/gojsonschema"
+
 	"synesis.sh/synesis/internal/api"
 	"synesis.sh/synesis/pkg/config"
 	"synesis.sh/synesis/pkg/ui"
@@ -38,7 +40,7 @@ func runExtract(args []string, noColor, quiet bool, profileName string) error {
 	// Use a custom var to properly collect multiple --field flags
 	var fieldList []string
 	fs.Var(&stringSliceValue{&fieldList}, "field", "field to extract (can repeat)")
-	_ = fs.String("schema", "", "JSON schema file")
+	schemaFile := fs.String("schema", "", "JSON schema file")
 	metadata := fs.Bool("metadata", false, "include uncertainty metadata")
 	renderModeStr := fs.String("render", "plain", "render mode: plain, markdown, raw")
 	output := fs.String("output", "json", "output format: json")
@@ -200,6 +202,27 @@ func runExtract(args []string, noColor, quiet bool, profileName string) error {
 		data, _ := json.Marshal(result)
 		fmt.Println(string(data))
 		return nil
+	}
+
+	// Validate against JSON schema if provided
+	if *schemaFile != "" {
+		schemaData, err := os.ReadFile(*schemaFile)
+		if err != nil {
+			return fmt.Errorf("read schema file: %w", err)
+		}
+		schemaLoader := gojsonschema.NewBytesLoader(schemaData)
+		documentLoader := gojsonschema.NewGoLoader(extracted)
+		res, err := gojsonschema.Validate(schemaLoader, documentLoader)
+		if err != nil {
+			return fmt.Errorf("schema validation error: %w", err)
+		}
+		if !res.Valid() {
+			var msgs []string
+			for _, verr := range res.Errors() {
+				msgs = append(msgs, verr.String())
+			}
+			return fmt.Errorf("schema validation failed:\n  %s", strings.Join(msgs, "\n  "))
+		}
 	}
 
 	// Ensure all requested fields exist with null for missing

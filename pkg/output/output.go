@@ -53,11 +53,12 @@ func formatJSON(raw []byte, field string) ([]byte, error) {
 		var result interface{}
 		for {
 			v, ok := iter.Next()
-		if !ok {
+			if !ok {
 				if err, ok := v.(error); ok {
-				return nil, fmt.Errorf("jq query error: %w", err)
-			}
-			result = v
+					return nil, fmt.Errorf("jq query error: %w", err)
+				}
+				result = v
+				break
 			}
 			result = v
 		}
@@ -134,12 +135,18 @@ func formatCSV(raw []byte) ([]byte, error) {
 
 // WriteOutput writes processed output to a file
 func WriteOutput(content []byte, filePath string) error {
-	return os.WriteFile(filePath, content, 0644)
+	return os.WriteFile(filePath, content, 0o600)
 }
 
 // AppendOutput appends processed output to a file
 func AppendOutput(content []byte, filePath string) error {
-	return os.WriteFile(filePath, content, 0644)
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(content)
+	return err
 }
 
 // ExtractPath extracts a value from JSON using a path expression
